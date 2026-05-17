@@ -1,6 +1,7 @@
 use hidapi::{HidApi, HidDevice};
 use std::fs::{File, OpenOptions};
 use std::os::unix::io::AsRawFd;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::report;
@@ -8,7 +9,14 @@ use crate::report;
 /// Combined handle: `hidapi` for reads, raw file for feature-report ioctls.
 pub struct Device {
     pub hid: HidDevice,
-    raw: File,
+    raw: Arc<Mutex<File>>,
+}
+
+impl Device {
+    /// Cloneable handle to the raw file for use in other threads.
+    pub fn raw_file(&self) -> Arc<Mutex<File>> {
+        Arc::clone(&self.raw)
+    }
 }
 
 /// x86_64 Linux HIDIOCSFEATURE for a 64-byte buffer.
@@ -34,8 +42,12 @@ pub fn open_controller(api: &HidApi) -> Result<Device, Box<dyn std::error::Error
         })
         .collect();
 
+    log::debug!("Found {} candidate vendor interfaces", candidates.len());
+
     for info in candidates {
         let path = info.path().to_str()?;
+        log::debug!("Trying interface at {}", path);
+
         let raw = OpenOptions::new().read(true).write(true).open(path)?;
         let hid = info.open_device(api)?;
 
@@ -44,20 +56,28 @@ pub fn open_controller(api: &HidApi) -> Result<Device, Box<dyn std::error::Error
         probe[0] = 0x01;
         probe[1] = report::commands::CLEAR_DIGITAL_MAPPINGS;
         if send_feature_ioctl(&raw, &probe).is_ok() {
-            return Ok(Device { hid, raw });
+            log::info!("Opened controller on {}", path);
+            return Ok(Device {
+                hid,
+                raw: Arc::new(Mutex::new(raw)),
+            });
         }
+        log::debug!("Interface at {} rejected feature report probe", path);
     }
 
     Err("No controller interface accepted feature reports".into())
 }
 
 /// Enable raw accelerometer + gyroscope output.
-pub fn enable_imu(device: &Device) -> Result<(), Box<dyn std::error::Error>> {
+pub fn enable_imu(file: &File) -> Result<(), Box<dyn std::error::Error>> {
+    log::debug!("Sending IMU enable sequence...");
+
     // 1. Clear digital button mappings (disable "lizard mode").
     let mut cmd = [0u8; 64];
     cmd[0] = 0x01;
     cmd[1] = report::commands::CLEAR_DIGITAL_MAPPINGS;
-    send_feature_ioctl(&device.raw, &cmd)?;
+    send_feature_ioctl(file, &cmd)?;
+    log::trace!("Sent CLEAR_DIGITAL_MAPPINGS");
 
     std::thread::sleep(Duration::from_millis(5));
 
@@ -66,7 +86,8 @@ pub fn enable_imu(device: &Device) -> Result<(), Box<dyn std::error::Error>> {
     cmd[0] = 0x01;
     cmd[1] = report::commands::LOAD_DEFAULT_SETTINGS;
     cmd[2] = 0;
-    send_feature_ioctl(&device.raw, &cmd)?;
+    send_feature_ioctl(file, &cmd)?;
+    log::trace!("Sent LOAD_DEFAULT_SETTINGS");
 
     std::thread::sleep(Duration::from_millis(5));
 
@@ -89,7 +110,8 @@ pub fn enable_imu(device: &Device) -> Result<(), Box<dyn std::error::Error>> {
     cmd[10] = (imu_mode & 0xFF) as u8;
     cmd[11] = (imu_mode >> 8) as u8;
 
-    send_feature_ioctl(&device.raw, &cmd)?;
+    send_feature_ioctl(file, &cmd)?;
+    log::debug!("IMU enable sequence complete");
 
     Ok(())
 }
