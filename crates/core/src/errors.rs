@@ -2,8 +2,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ServerError {
-    #[error("Address `{0}` is not valid")]
-    InvalidAddress(String),
     #[error("could not initialize HID API: {0}")]
     HidApi(#[from] hidapi::HidError),
 }

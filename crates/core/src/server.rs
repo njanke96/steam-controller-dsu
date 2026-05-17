@@ -6,7 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::frame::TritonFrame;
-use crate::{ServerConfig, protocol};
+use crate::{READ_ATOMIC_BOOL_ORDERING, ServerConfig, protocol};
 
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(5);
 const VERSION_TYPE: u32 = 0x100000;
@@ -27,10 +27,16 @@ pub struct Server;
 impl Server {
     /// Start the CemuHook UDP server on `bind_addr` and broadcast frames
     /// received on `rx` to all subscribed CemuHook clients.
-    pub fn run(rx: Receiver<TritonFrame>, config: &ServerConfig) -> io::Result<()> {
-        let socket = UdpSocket::bind(config.bind_addr.clone())?;
+    pub fn run(
+        rx: Receiver<TritonFrame>,
+        running: Arc<AtomicBool>,
+        config: &ServerConfig,
+    ) -> io::Result<()> {
+        let addr = format!("{}:{}", config.bind_addr, config.port);
+        log::debug!("Trying to bind to {}", addr);
+        let socket = UdpSocket::bind(&addr)?;
         socket.set_read_timeout(Some(Duration::from_secs(1)))?;
-        log::info!("CemuHook server listening on {}", &config.bind_addr);
+        log::info!("CemuHook server listening on {}", addr);
 
         let clients: Arc<Mutex<Vec<Client>>> = Arc::new(Mutex::new(Vec::new()));
         let shutdown = Arc::new(AtomicBool::new(false));
@@ -40,13 +46,21 @@ impl Server {
         let send_clients = Arc::clone(&clients);
         let send_shutdown = Arc::clone(&shutdown);
         let send_config = config.clone();
+        let send_running = running.clone();
 
         let send_handle = thread::spawn(move || {
-            send_loop(send_socket, rx, send_clients, send_shutdown, send_config);
+            send_loop(
+                send_running,
+                send_socket,
+                rx,
+                send_clients,
+                send_shutdown,
+                send_config,
+            );
         });
 
         // Run recv loop on this thread.
-        let recv_result = recv_loop(socket, clients, shutdown);
+        let recv_result = recv_loop(running.clone(), socket, clients, shutdown);
 
         // Wait for send thread to finish.
         if let Err(e) = send_handle.join() {
@@ -58,6 +72,7 @@ impl Server {
 }
 
 fn recv_loop(
+    main_running: Arc<AtomicBool>,
     socket: UdpSocket,
     clients: Arc<Mutex<Vec<Client>>>,
     shutdown: Arc<AtomicBool>,
@@ -66,7 +81,8 @@ fn recv_loop(
     let mut version_buf = [0u8; 22];
     let mut info_buf = [0u8; 32];
 
-    while !shutdown.load(Ordering::Relaxed) {
+    while main_running.load(READ_ATOMIC_BOOL_ORDERING) && !shutdown.load(READ_ATOMIC_BOOL_ORDERING)
+    {
         match socket.recv_from(&mut buf) {
             Ok((n, addr)) => {
                 if n < 20 {
@@ -152,11 +168,15 @@ fn recv_loop(
                 }
             }
             Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
-                // Read timeout — prune stale clients.
+                // Read timeout
                 prune_clients(&clients);
             }
+            Err(e) if e.kind() == io::ErrorKind::Interrupted => {
+                // Probable SIGINT
+                log::debug!("UDP recv interrupted");
+            }
             Err(e) => {
-                log::error!("UDP recv error: {}", e);
+                log::error!("UDP recv error: {:?}", e);
             }
         }
     }
@@ -165,6 +185,7 @@ fn recv_loop(
 }
 
 fn send_loop(
+    main_running: Arc<AtomicBool>,
     socket: UdpSocket,
     rx: Receiver<TritonFrame>,
     clients: Arc<Mutex<Vec<Client>>>,
@@ -175,7 +196,8 @@ fn send_loop(
     let mut timestamp_us: u64 = 0;
 
     loop {
-        if shutdown.load(Ordering::Relaxed) {
+        if !main_running.load(READ_ATOMIC_BOOL_ORDERING) || shutdown.load(READ_ATOMIC_BOOL_ORDERING)
+        {
             break;
         }
 
@@ -183,7 +205,7 @@ fn send_loop(
             Ok(f) => f,
             Err(_) => {
                 log::debug!("Frame channel closed, send loop exiting");
-                shutdown.store(true, Ordering::Relaxed);
+                shutdown.store(true, Ordering::SeqCst);
                 break;
             }
         };

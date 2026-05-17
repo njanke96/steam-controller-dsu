@@ -1,7 +1,9 @@
-use crate::frame::TritonFrame;
 use hidapi::HidDevice;
-use std::sync::mpsc;
+use std::sync::{Arc, atomic, mpsc};
 use std::thread;
+
+use crate::READ_ATOMIC_BOOL_ORDERING;
+use crate::frame::TritonFrame;
 
 /// Number of consecutive identical IMU frames before logging a warning.
 const FROZEN_THRESHOLD: usize = 100;
@@ -19,7 +21,10 @@ pub struct Reader {
 
 impl Reader {
     /// Spawn a thread that reads from `device` and sends parsed frames over the returned channel.
-    pub fn start(hid: HidDevice) -> (Self, mpsc::Receiver<TritonFrame>) {
+    pub fn start(
+        running: Arc<atomic::AtomicBool>,
+        hid: HidDevice,
+    ) -> (Self, mpsc::Receiver<TritonFrame>) {
         let (tx, rx) = mpsc::channel::<TritonFrame>();
 
         let handle = thread::spawn(move || {
@@ -31,7 +36,7 @@ impl Reader {
 
             log::debug!("Reader thread started");
 
-            loop {
+            while running.load(READ_ATOMIC_BOOL_ORDERING) {
                 match hid.read_timeout(&mut buf, 100) {
                     Ok(n) if n >= TritonFrame::REPORT_SIZE => {
                         fail_count = 0;

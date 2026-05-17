@@ -16,3 +16,4 @@ resolver = "3"
 
 [workspace.dependencies]
 log = "0.4"
+ctrlc = { version = "3", features = ["termination"] }

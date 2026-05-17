@@ -1,3 +1,5 @@
+use std::sync::{Arc, atomic};
+
 use clap::Parser;
 
 #[derive(Parser)]
@@ -14,7 +16,7 @@ pub struct Args {
     #[arg(long, default_value_t = 26760)]
     pub port: u16,
 
-    /// Invert the pitch axis (opposite of Nintendo Switch behavior).
+    /// Invert the pitch axis
     #[arg(long, default_value_t = false)]
     pub invert_y: bool,
 }
@@ -23,10 +25,22 @@ pub struct Args {
 pub fn entrypoint() -> i32 {
     env_logger::init();
 
+    // ctrlc signal handler, handles SIGINT on Unix as well
+    let running = Arc::new(atomic::AtomicBool::new(true));
+    let running_signal = running.clone();
+
+    if let Err(err) = ctrlc::set_handler(move || {
+        log::info!("Got a shutdown signal...");
+        running_signal.store(false, atomic::Ordering::SeqCst);
+    }) {
+        log::error!("Failed to set ctrlc signal handler: {err}");
+        return 1;
+    };
+
     let args = Args::parse();
 
     if args.debug {
-        if let Err(err) = scdsu_core::run_debug_dump() {
+        if let Err(err) = scdsu_core::run_debug_dump(running) {
             log::error!("Error from run_debug_dump: {err}");
         }
         return 1;
@@ -40,7 +54,7 @@ pub fn entrypoint() -> i32 {
 
     log::debug!("Server configuration from cli args: {config:?}");
 
-    if let Err(err) = scdsu_core::run_server(config) {
+    if let Err(err) = scdsu_core::run_server(running, config) {
         log::error!("Error from run_server: {err}");
         return 1;
     }
