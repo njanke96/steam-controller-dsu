@@ -9,11 +9,27 @@ pub mod reader;
 pub mod report;
 pub mod server;
 
-pub fn run_server(bind_addr: String, port: u16, invert_y: bool) {
-    let addr = SocketAddr::from_str(&format!("{}:{}", bind_addr, port)).unwrap_or_else(|e| {
-        log::error!("Invalid bind address '{}:{}': {}", bind_addr, port, e);
-        std::process::exit(1);
-    });
+#[derive(Debug, Clone)]
+pub struct ServerConfig {
+    /// Address or host to bind to
+    pub bind_addr: String,
+    // Port to listen on
+    pub port: u16,
+    /// Invert the yaxis values on the gyro and accelerometer
+    pub invert_y: bool,
+}
+
+pub fn run_server(config: ServerConfig) {
+    let addr = SocketAddr::from_str(&format!("{}:{}", config.bind_addr, config.port))
+        .unwrap_or_else(|e| {
+            log::error!(
+                "Invalid bind address '{}:{}': {}",
+                config.bind_addr,
+                config.port,
+                e
+            );
+            std::process::exit(1);
+        });
 
     let mut api = match hidapi::HidApi::new() {
         Ok(api) => api,
@@ -39,7 +55,7 @@ pub fn run_server(bind_addr: String, port: u16, invert_y: bool) {
 
         let (reader, rx) = reader::Reader::start(device.hid);
 
-        if let Err(e) = server::Server::run(addr, rx, invert_y) {
+        if let Err(e) = server::Server::run(rx, &config) {
             log::error!("Server error: {e}");
         }
 

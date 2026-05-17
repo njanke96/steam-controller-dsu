@@ -30,5 +30,13 @@ pub fn entrypoint() {
         return;
     }
 
-    scdsu_core::run_server(args.bind_addr, args.port, args.invert_y);
+    let config = scdsu_core::ServerConfig {
+        bind_addr: args.bind_addr,
+        port: args.port,
+        invert_y: args.invert_y,
+    };
+
+    log::debug!("Server configuration from cli args: {config:?}");
+
+    scdsu_core::run_server(config);
 }
