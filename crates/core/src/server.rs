@@ -189,6 +189,7 @@ fn send_loop(
             Ok(f) => f,
             Err(_) => {
                 log::debug!("Frame channel closed, send loop exiting");
+                shutdown.store(true, Ordering::Relaxed);
                 break;
             }
         };

@@ -1,15 +1,16 @@
 use hidapi::HidDevice;
-use std::fs::File;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::mpsc;
 use std::thread;
-use crate::device::enable_imu;
 use crate::frame::TritonFrame;
 
-/// Number of consecutive identical IMU frames before triggering a re-enable.
-/// Normal sensor noise rarely produces more than a few identical frames.
+/// Number of consecutive identical IMU frames before logging a warning.
 const FROZEN_THRESHOLD: usize = 100;
-/// Number of frames to wait after a re-enable attempt before trying again.
-const REENABLE_COOLDOWN_FRAMES: usize = 1000;
+/// Number of frozen frames before giving up and exiting (~5 seconds at 100Hz).
+/// This allows recovery when Steam takes the controller and changes IMU mode.
+const FROZEN_EXIT_THRESHOLD: usize = 500;
+/// Number of consecutive failed reads before assuming disconnect.
+/// At ~100Hz this is ~2 seconds of no data.
+const DISCONNECT_THRESHOLD: usize = 20;
 
 /// Background reader that continuously parses Triton frames from the controller.
 pub struct Reader {
@@ -20,22 +21,22 @@ impl Reader {
     /// Spawn a thread that reads from `device` and sends parsed frames over the returned channel.
     pub fn start(
         hid: HidDevice,
-        raw: Arc<Mutex<File>>,
     ) -> (Self, mpsc::Receiver<TritonFrame>) {
         let (tx, rx) = mpsc::channel::<TritonFrame>();
 
         let handle = thread::spawn(move || {
             let mut buf = [0u8; 64];
             let mut frozen_count = 0usize;
-            let mut cooldown = 0usize;
             let mut total_frames = 0usize;
             let mut prev_frame: Option<TritonFrame> = None;
+            let mut fail_count = 0usize;
 
             log::debug!("Reader thread started");
 
             loop {
                 match hid.read_timeout(&mut buf, 100) {
                     Ok(n) if n >= TritonFrame::REPORT_SIZE => {
+                        fail_count = 0;
                         if let Some(frame) = TritonFrame::parse(&buf[..n]) {
                             total_frames += 1;
                             log::trace!(
@@ -57,44 +58,27 @@ impl Reader {
 
                             if is_frozen {
                                 frozen_count += 1;
-                                if frozen_count >= 50 {
-                                    log::debug!(
-                                        "Frozen IMU frame detected ({}/{})",
-                                        frozen_count,
-                                        FROZEN_THRESHOLD
-                                    );
-                                }
-                                if frozen_count >= FROZEN_THRESHOLD && cooldown == 0 {
+                                if frozen_count == FROZEN_THRESHOLD {
                                     log::warn!(
-                                        "IMU appears frozen ({} consecutive identical frames). Re-enabling...",
+                                        "IMU data frozen ({} identical frames). Another process may have taken the controller.",
                                         frozen_count
                                     );
-                                    if let Ok(file) = raw.lock() {
-                                        match enable_imu(&*file) {
-                                            Ok(_) => {
-                                                log::info!("IMU re-enabled successfully");
-                                                cooldown = REENABLE_COOLDOWN_FRAMES;
-                                                frozen_count = 0;
-                                            }
-                                            Err(e) => {
-                                                log::error!("Failed to re-enable IMU: {}", e);
-                                                cooldown = REENABLE_COOLDOWN_FRAMES;
-                                            }
-                                        }
-                                    }
+                                }
+                                if frozen_count >= FROZEN_EXIT_THRESHOLD {
+                                    log::warn!(
+                                        "IMU frozen for {} frames. Exiting to trigger recovery.",
+                                        frozen_count
+                                    );
+                                    break;
                                 }
                                 prev_frame = Some(frame);
                                 continue;
                             }
 
-                            if frozen_count > 0 && frozen_count >= 50 {
-                                log::debug!("IMU data resumed after {} frozen frames", frozen_count);
+                            if frozen_count >= FROZEN_THRESHOLD {
+                                log::info!("IMU data resumed after {} frozen frames", frozen_count);
                             }
                             frozen_count = 0;
-
-                            if cooldown > 0 {
-                                cooldown -= 1;
-                            }
 
                             if total_frames % 100 == 0 {
                                 log::debug!(
@@ -119,10 +103,17 @@ impl Reader {
                     }
                     Ok(n) => {
                         log::trace!("Short read: {} bytes", n);
+                        fail_count += 1;
                     }
                     Err(e) => {
                         log::trace!("HID read error: {}", e);
+                        fail_count += 1;
                     }
+                }
+
+                if fail_count >= DISCONNECT_THRESHOLD {
+                    log::warn!("Controller appears disconnected ({} consecutive read failures). Exiting reader.", fail_count);
+                    break;
                 }
             }
 

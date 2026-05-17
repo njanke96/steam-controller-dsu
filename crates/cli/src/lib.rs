@@ -1,6 +1,7 @@
 use clap::Parser;
 use std::net::SocketAddr;
 use std::str::FromStr;
+use std::time::Duration;
 
 #[derive(Parser)]
 pub struct Args {
@@ -39,6 +40,20 @@ pub fn main() {
     run_server(args.bind_addr, args.port);
 }
 
+fn open_controller_with_retry(
+    api: &scdsu_core::hidapi::HidApi,
+) -> scdsu_core::device::Device {
+    loop {
+        match scdsu_core::device::open_controller(api) {
+            Ok(d) => return d,
+            Err(e) => {
+                log::warn!("Failed to open controller: {e}. Retrying in 5 seconds...");
+                std::thread::sleep(Duration::from_secs(5));
+            }
+        }
+    }
+}
+
 fn run_server(bind_addr: String, port: u16) {
     let addr = SocketAddr::from_str(&format!("{}:{}", bind_addr, port))
         .unwrap_or_else(|e| {
@@ -46,7 +61,7 @@ fn run_server(bind_addr: String, port: u16) {
             std::process::exit(1);
         });
 
-    let api = match scdsu_core::hidapi::HidApi::new() {
+    let mut api = match scdsu_core::hidapi::HidApi::new() {
         Ok(api) => api,
         Err(e) => {
             log::error!("Failed to initialize HID API: {e}");
@@ -54,30 +69,30 @@ fn run_server(bind_addr: String, port: u16) {
         }
     };
 
-    let device = match scdsu_core::device::open_controller(&api) {
-        Ok(d) => d,
-        Err(e) => {
-            log::error!("Failed to open controller: {e}");
-            std::process::exit(1);
+    loop {
+        if let Err(e) = api.refresh_devices() {
+            log::warn!("Failed to refresh HID device list: {e}");
         }
-    };
+        let device = open_controller_with_retry(&api);
 
-    log::info!("Controller opened. Enabling IMU...");
-    if let Err(e) = scdsu_core::device::enable_imu(&*device.raw_file().lock().unwrap()) {
-        log::error!("Failed to enable IMU: {e}");
-        std::process::exit(1);
+        log::info!("Controller opened. Enabling IMU...");
+        if let Err(e) = scdsu_core::device::enable_imu(&*device.raw_file().lock().unwrap()) {
+            log::error!("Failed to enable IMU: {e}");
+            std::thread::sleep(Duration::from_secs(3));
+            continue;
+        }
+        log::info!("IMU enabled. Starting CemuHook server on {} ...", addr);
+
+        let (reader, rx) = scdsu_core::reader::Reader::start(device.hid);
+
+        if let Err(e) = scdsu_core::server::Server::run(addr, rx) {
+            log::error!("Server error: {e}");
+        }
+
+        reader.join();
+        log::info!("Server shut down. Waiting 3 seconds before reconnect...");
+        std::thread::sleep(Duration::from_secs(3));
     }
-    log::info!("IMU enabled. Starting CemuHook server on {} ...", addr);
-
-    let raw = device.raw_file();
-    let (reader, rx) = scdsu_core::reader::Reader::start(device.hid, raw);
-
-    if let Err(e) = scdsu_core::server::Server::run(addr, rx) {
-        log::error!("Server error: {e}");
-    }
-
-    reader.join();
-    log::info!("Server shut down.");
 }
 
 fn run_debug_dump() {
@@ -89,13 +104,7 @@ fn run_debug_dump() {
         }
     };
 
-    let device = match scdsu_core::device::open_controller(&api) {
-        Ok(d) => d,
-        Err(e) => {
-            log::error!("Failed to open controller: {e}");
-            return;
-        }
-    };
+    let device = open_controller_with_retry(&api);
 
     log::info!("Controller opened. Enabling IMU...");
     if let Err(e) = scdsu_core::device::enable_imu(&*device.raw_file().lock().unwrap()) {
@@ -104,8 +113,7 @@ fn run_debug_dump() {
     }
     log::info!("IMU enabled. Dumping frames (Ctrl-C to stop)...");
 
-    let raw = device.raw_file();
-    let (reader, rx) = scdsu_core::reader::Reader::start(device.hid, raw);
+    let (reader, rx) = scdsu_core::reader::Reader::start(device.hid);
 
     loop {
         match rx.recv() {
