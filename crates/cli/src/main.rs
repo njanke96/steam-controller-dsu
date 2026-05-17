@@ -1,3 +1,4 @@
 pub fn main() {
-    scdsu_cli::entrypoint();
+    let return_code = scdsu_cli::entrypoint();
+    std::process::exit(return_code);
 }

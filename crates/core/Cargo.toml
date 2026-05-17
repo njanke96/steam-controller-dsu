@@ -7,3 +7,4 @@ edition = "2024"
 hidapi = "2.6"
 libc = "0.2"
 log = { workspace = true }
+thiserror = "2.0.18"

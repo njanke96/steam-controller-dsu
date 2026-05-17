@@ -32,7 +32,6 @@ pub mod trackpad_modes {
 
 /// IMU mode bitflags.
 pub mod imu_modes {
-    pub const OFF: u16 = 0x00;
     pub const SEND_RAW_ACCEL: u16 = 0x08;
     pub const SEND_RAW_GYRO: u16 = 0x10;
 }

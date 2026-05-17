@@ -20,14 +20,16 @@ pub struct Args {
 }
 
 /// The CLI entrypoint to be called from the root crate's `[[bin]]`
-pub fn entrypoint() {
+pub fn entrypoint() -> i32 {
     env_logger::init();
 
     let args = Args::parse();
 
     if args.debug {
-        scdsu_core::run_debug_dump();
-        return;
+        if let Err(err) = scdsu_core::run_debug_dump() {
+            log::error!("Error from run_debug_dump: {err}");
+        }
+        return 1;
     }
 
     let config = scdsu_core::ServerConfig {
@@ -38,5 +40,10 @@ pub fn entrypoint() {
 
     log::debug!("Server configuration from cli args: {config:?}");
 
-    scdsu_core::run_server(config);
+    if let Err(err) = scdsu_core::run_server(config) {
+        log::error!("Error from run_server: {err}");
+        return 1;
+    }
+
+    0
 }

@@ -87,17 +87,6 @@ impl TritonFrame {
         )
     }
 
-    /// Returns true if all accel and gyro axes are exactly zero.
-    /// This usually means another process (e.g. Steam Input) disabled the IMU.
-    pub fn is_imu_zero(&self) -> bool {
-        self.accel_x == 0
-            && self.accel_y == 0
-            && self.accel_z == 0
-            && self.gyro_x == 0
-            && self.gyro_y == 0
-            && self.gyro_z == 0
-    }
-
     /// Returns true if IMU data (accel + gyro) matches another frame exactly.
     /// Used to detect frozen/stale sensor data.
     pub fn imu_eq(&self, other: &Self) -> bool {

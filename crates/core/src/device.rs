@@ -4,6 +4,7 @@ use std::os::unix::io::AsRawFd;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::errors::DeviceError;
 use crate::report;
 
 /// Combined handle: `hidapi` for reads, raw file for feature-report ioctls.
@@ -32,7 +33,7 @@ fn send_feature_ioctl(file: &File, data: &[u8; 64]) -> Result<(), std::io::Error
 }
 
 /// Enumerate all vendor interfaces and return the first one that accepts feature reports.
-pub fn open_controller(api: &HidApi) -> Result<Device, Box<dyn std::error::Error>> {
+pub fn open_controller(api: &HidApi) -> Result<Device, DeviceError> {
     let candidates: Vec<_> = api
         .device_list()
         .filter(|d| {
@@ -45,13 +46,18 @@ pub fn open_controller(api: &HidApi) -> Result<Device, Box<dyn std::error::Error
     log::debug!("Found {} candidate vendor interfaces", candidates.len());
 
     for info in candidates {
-        let path = info.path().to_str()?;
+        let Ok(path) = info.path().to_str() else {
+            log::debug!("Skipping device, could not get a path: {info:?}");
+            continue;
+        };
+
         log::debug!("Trying interface at {}", path);
 
         let raw = OpenOptions::new().read(true).write(true).open(path)?;
         let hid = info.open_device(api)?;
 
-        // Probe: try to clear digital mappings (Report ID 1).
+        // Try to clear digital mappings (Report ID 1)
+        // If this succeeds we have reason enough to believe the device is valid
         let mut probe = [0u8; 64];
         probe[0] = 0x01;
         probe[1] = report::commands::CLEAR_DIGITAL_MAPPINGS;
@@ -65,11 +71,11 @@ pub fn open_controller(api: &HidApi) -> Result<Device, Box<dyn std::error::Error
         log::debug!("Interface at {} rejected feature report probe", path);
     }
 
-    Err("No controller interface accepted feature reports".into())
+    Err(DeviceError::NoDeviceFound)
 }
 
 /// Enable raw accelerometer + gyroscope output.
-pub fn enable_imu(file: &File) -> Result<(), Box<dyn std::error::Error>> {
+pub fn enable_imu(file: &File) -> Result<(), DeviceError> {
     log::debug!("Sending IMU enable sequence...");
 
     // 1. Clear digital button mappings (disable "lizard mode").

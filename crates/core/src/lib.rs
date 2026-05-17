@@ -2,12 +2,16 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::Duration;
 
-pub mod device;
-pub mod frame;
-pub mod protocol;
-pub mod reader;
-pub mod report;
-pub mod server;
+use crate::errors::{DeviceError, ServerError};
+
+pub mod errors;
+
+pub(crate) mod device;
+pub(crate) mod frame;
+pub(crate) mod protocol;
+pub(crate) mod reader;
+pub(crate) mod report;
+pub(crate) mod server;
 
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
@@ -19,25 +23,12 @@ pub struct ServerConfig {
     pub invert_y: bool,
 }
 
-pub fn run_server(config: ServerConfig) {
-    let addr = SocketAddr::from_str(&format!("{}:{}", config.bind_addr, config.port))
-        .unwrap_or_else(|e| {
-            log::error!(
-                "Invalid bind address '{}:{}': {}",
-                config.bind_addr,
-                config.port,
-                e
-            );
-            std::process::exit(1);
-        });
+/// Run the server loop until receiving a signal
+pub fn run_server(config: ServerConfig) -> Result<(), ServerError> {
+    let address = format!("{}:{}", config.bind_addr, config.port);
+    let addr = SocketAddr::from_str(&address).map_err(|_| ServerError::InvalidAddress(address))?;
 
-    let mut api = match hidapi::HidApi::new() {
-        Ok(api) => api,
-        Err(e) => {
-            log::error!("Failed to initialize HID API: {e}");
-            std::process::exit(1);
-        }
-    };
+    let mut api = hidapi::HidApi::new()?;
 
     loop {
         if let Err(e) = api.refresh_devices() {
@@ -65,22 +56,15 @@ pub fn run_server(config: ServerConfig) {
     }
 }
 
-pub fn run_debug_dump() {
-    let api = match hidapi::HidApi::new() {
-        Ok(api) => api,
-        Err(e) => {
-            log::error!("Failed to initialize HID API: {e}");
-            return;
-        }
-    };
+/// Run the debug loop.
+/// Attempts to open the controller and dump frames.
+pub fn run_debug_dump() -> Result<(), DeviceError> {
+    let api = hidapi::HidApi::new()?;
 
-    let device = open_controller_with_retry(&api);
+    let device = device::open_controller(&api)?;
 
     log::info!("Controller opened. Enabling IMU...");
-    if let Err(e) = device::enable_imu(&device.raw_file().lock().unwrap()) {
-        log::error!("Failed to enable IMU: {e}");
-        return;
-    }
+    device::enable_imu(&device.raw_file().lock().unwrap())?;
     log::info!("IMU enabled. Dumping frames (Ctrl-C to stop)...");
 
     let (reader, rx) = reader::Reader::start(device.hid);
@@ -105,6 +89,7 @@ pub fn run_debug_dump() {
     drop(rx);
     reader.join();
     log::info!("Debug dump finished.");
+    Ok(())
 }
 
 fn open_controller_with_retry(api: &hidapi::HidApi) -> device::Device {
