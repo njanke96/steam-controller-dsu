@@ -1,5 +1,5 @@
 /// CRC32 used by the CemuHook protocol.
-/// Matches the bit-by-bit algorithm from the reference C++ code.
+/// Matches the algorithm from SteamDeckGyroDSU.
 pub fn crc32(data: &[u8]) -> u32 {
     let mut crc: u32 = 0xFFFFFFFF;
     for &byte in data {
@@ -56,28 +56,6 @@ pub fn write_info_response(buf: &mut [u8], slot: u8, client_id: u32, connected: 
 
 /// Build a CemuHook data-event packet (100 bytes) from a `TritonFrame`.
 /// Buttons / sticks / touch are zeroed — only motion data is populated.
-///
-/// # CemuHook wire layout (absolute offsets, 0-indexed)
-/// ```text
-///  0-3   : magic "DSUS"
-///  4-5   : version (1001)
-///  6-7   : length (84)
-///  8-11  : crc32
-///  12-15 : client id
-///  16-19 : event type (0x100002)
-///  20-30 : SharedResponse (11 bytes)
-///  31    : connected (1)
-///  32-35 : packetNumber
-///  36-55 : buttons, sticks, analog buttons (20 bytes)
-///  56-67 : touch data (12 bytes)
-///  68-75 : timestamp (µs, u64 LE)
-///  76-79 : accX (f32 LE)
-///  80-83 : accY (f32 LE)
-///  84-87 : accZ (f32 LE)
-///  88-91 : pitch / gyroX (f32 LE)
-///  92-95 : yaw   / gyroY (f32 LE)
-///  96-99 : roll  / gyroZ (f32 LE)
-/// ```
 pub fn write_data_event(
     buf: &mut [u8; 100],
     frame: &crate::frame::TritonFrame,

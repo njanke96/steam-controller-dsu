@@ -77,7 +77,7 @@ impl TritonFrame {
         })
     }
 
-    /// Accelerometer in g (same scale as Steam Deck).
+    /// Accelerometer in g.
     pub fn accel_g(&self) -> (f32, f32, f32) {
         (
             self.accel_x as f32 / ACCEL_PER_G,
@@ -86,7 +86,7 @@ impl TritonFrame {
         )
     }
 
-    /// Gyroscope in degrees per second (same scale as Steam Deck).
+    /// Gyroscope in degrees per second
     pub fn gyro_dps(&self) -> (f32, f32, f32) {
         (
             self.gyro_x as f32 / GYRO_PER_DPS,
@@ -95,8 +95,7 @@ impl TritonFrame {
         )
     }
 
-    /// Returns true if IMU data (accel + gyro) matches another frame exactly.
-    /// Used to detect frozen/stale sensor data.
+    /// Returns true if IMU data (accel + gyro) matches another frame exactly
     pub fn imu_eq(&self, other: &Self) -> bool {
         self.accel_x == other.accel_x
             && self.accel_y == other.accel_y

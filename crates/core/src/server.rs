@@ -6,7 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::frame::TritonFrame;
-use crate::{READ_ATOMIC_BOOL_ORDERING, ServerConfig, protocol};
+use crate::{READ_ATOMIC_BOOL_ORDERING, ServerConfig, dsu};
 
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(5);
 const VERSION_TYPE: u32 = 0x100000;
@@ -108,7 +108,7 @@ fn recv_loop(
 
                 match event_type {
                     VERSION_TYPE => {
-                        protocol::write_version_response(&mut version_buf, client_id);
+                        dsu::write_version_response(&mut version_buf, client_id);
                         if let Err(e) = socket.send_to(&version_buf, addr) {
                             log::warn!("Failed to send version response to {}: {}", addr, e);
                         }
@@ -123,7 +123,7 @@ fn recv_loop(
                             // Report our single controller as connected on every
                             // requested slot so clients don't have to be
                             // configured for slot 0 specifically.
-                            protocol::write_info_response(&mut info_buf, slot, client_id, true);
+                            dsu::write_info_response(&mut info_buf, slot, client_id, true);
                             if let Err(e) = socket.send_to(&info_buf, addr) {
                                 log::warn!("Failed to send info response to {}: {}", addr, e);
                             }
@@ -218,7 +218,7 @@ fn send_loop(
         for client in list.iter_mut() {
             client.packet_counter = client.packet_counter.wrapping_add(1);
 
-            protocol::write_data_event(
+            dsu::write_data_event(
                 &mut packet_buf,
                 &frame,
                 client.packet_counter,

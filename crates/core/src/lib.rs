@@ -6,9 +6,9 @@ use crate::errors::{DeviceError, ServerError};
 
 pub mod errors;
 
-pub(crate) mod device;
+pub(crate) mod devices;
+pub(crate) mod dsu;
 pub(crate) mod frame;
-pub(crate) mod protocol;
 pub(crate) mod reader;
 pub(crate) mod server;
 
@@ -91,7 +91,7 @@ pub fn run_server(
 pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceError> {
     let api = hidapi::HidApi::new()?;
 
-    let device = device::open_controller(&api)?;
+    let device = devices::linux_device::open_controller(&api)?;
 
     log::info!("Controller opened. Enabling IMU...");
     device.enable_imu()?;
@@ -128,13 +128,13 @@ pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceErro
 fn open_controller_with_retry(
     running: Arc<atomic::AtomicBool>,
     api: &hidapi::HidApi,
-) -> Option<device::Device> {
+) -> Option<devices::linux_device::LinuxDevice> {
     loop {
         if !running.load(READ_ATOMIC_BOOL_ORDERING) {
             return None;
         }
 
-        match device::open_controller(api) {
+        match devices::linux_device::open_controller(api) {
             Ok(d) => return Some(d),
             Err(e) => {
                 log::warn!(

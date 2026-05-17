@@ -3,7 +3,9 @@ use std::fs::OpenOptions;
 use std::os::unix::io::AsRawFd;
 use std::time::Duration;
 
+use crate::devices::device::Device;
 use crate::errors::DeviceError;
+use crate::frame::TritonFrame;
 
 /// Steam Controller vendor/product IDs.
 pub const VID: u16 = 0x28de;
@@ -30,17 +32,14 @@ pub const IMU_MODE_SEND_RAW_ACCEL: u16 = 0x08;
 pub const IMU_MODE_SEND_RAW_GYRO: u16 = 0x10;
 
 const FEATURE_REPORT_SLEEP_MILLIS: u64 = 50;
+const READ_TIMOUT_MILLIS: i32 = 100;
 
-pub struct Device {
+pub struct LinuxDevice {
     hid: HidDevice,
     path: String,
 }
 
-impl Device {
-    pub fn borrow_hid_device(&self) -> &HidDevice {
-        return &self.hid;
-    }
-
+impl LinuxDevice {
     /// Enable raw accelerometer + gyroscope output.
     pub fn enable_imu(&self) -> Result<(), DeviceError> {
         let raw = OpenOptions::new().read(true).write(true).open(&self.path)?;
@@ -49,7 +48,19 @@ impl Device {
     }
 }
 
-impl Drop for Device {
+impl Device for LinuxDevice {
+    /// Read a single Triton frame from the controller.
+    fn read_triton_frame(&self) -> Result<TritonFrame, DeviceError> {
+        let mut buf = [0u8; 64];
+        let n = self.hid.read_timeout(&mut buf, READ_TIMOUT_MILLIS)?;
+        if n < TritonFrame::REPORT_SIZE {
+            return Err(DeviceError::ShortRead(n, TritonFrame::REPORT_SIZE));
+        }
+        TritonFrame::parse(&buf[..n]).ok_or(DeviceError::NonTritonReport(buf[0]))
+    }
+}
+
+impl Drop for LinuxDevice {
     fn drop(&mut self) {
         // Best-effort cleanup: attempt to return controller to factory defaults
         let Ok(raw) = OpenOptions::new().read(true).write(true).open(&self.path) else {
@@ -84,7 +95,7 @@ fn send_feature_report_via_ioctl(file: &std::fs::File, data: &[u8]) -> Result<()
 }
 
 /// Enumerate all vendor interfaces and return the first one that opens.
-pub fn open_controller(api: &HidApi) -> Result<Device, DeviceError> {
+pub fn open_controller(api: &HidApi) -> Result<LinuxDevice, DeviceError> {
     let candidates: Vec<_> = api
         .device_list()
         .filter(|d| {
@@ -116,7 +127,7 @@ pub fn open_controller(api: &HidApi) -> Result<Device, DeviceError> {
         probe[1] = CMD_CLEAR_DIGITAL_MAPPINGS;
         if send_feature_report_via_ioctl(&raw, &probe).is_ok() {
             log::info!("Opened controller on {}", path);
-            return Ok(Device {
+            return Ok(LinuxDevice {
                 hid,
                 path: path.to_string(),
             });
