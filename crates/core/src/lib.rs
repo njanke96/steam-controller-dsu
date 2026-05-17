@@ -69,18 +69,13 @@ pub fn run_server(
             config.port
         );
 
-        let path = device.path().to_string();
-        let (reader, rx) = reader::Reader::start(running.clone(), device.hid);
+        let (reader, rx) = reader::Reader::start(running.clone(), device);
 
         if let Err(e) = server::Server::run(rx, running.clone(), &config) {
             log::error!("Server error: {e}");
         }
 
         reader.join();
-
-        if let Err(e) = device::disable_imu_by_path(&path) {
-            log::warn!("Failed to send IMU disable on disconnect: {e}");
-        }
 
         if !running.load(READ_ATOMIC_BOOL_ORDERING) {
             return Ok(());
@@ -102,8 +97,7 @@ pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceErro
     device.enable_imu()?;
     log::info!("IMU enabled. Dumping frames...");
 
-    let path = device.path().to_string();
-    let (reader, rx) = reader::Reader::start(running.clone(), device.hid);
+    let (reader, rx) = reader::Reader::start(running.clone(), device);
 
     while running.load(READ_ATOMIC_BOOL_ORDERING) {
         match rx.recv() {
@@ -124,10 +118,6 @@ pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceErro
 
     drop(rx);
     reader.join();
-
-    if let Err(e) = device::disable_imu_by_path(&path) {
-        log::warn!("Failed to send IMU disable on disconnect: {e}");
-    }
 
     log::info!("Debug dump finished.");
     Ok(())

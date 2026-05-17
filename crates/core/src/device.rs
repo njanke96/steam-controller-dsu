@@ -31,16 +31,14 @@ pub const IMU_MODE_SEND_RAW_GYRO: u16 = 0x10;
 
 const FEATURE_REPORT_SLEEP_MILLIS: u64 = 50;
 
-/// Combined handle: `hidapi` for reads, path stored so feature-report
-/// ioctls can be performed by temporarily reopening the raw hidraw node.
 pub struct Device {
-    pub hid: HidDevice,
+    hid: HidDevice,
     path: String,
 }
 
 impl Device {
-    pub fn path(&self) -> &str {
-        &self.path
+    pub fn borrow_hid_device(&self) -> &HidDevice {
+        return &self.hid;
     }
 
     /// Enable raw accelerometer + gyroscope output.
@@ -48,6 +46,22 @@ impl Device {
         let raw = OpenOptions::new().read(true).write(true).open(&self.path)?;
         enable_imu_on_file(&raw)?;
         Ok(())
+    }
+}
+
+impl Drop for Device {
+    fn drop(&mut self) {
+        // Best-effort cleanup: attempt to return controller to factory defaults
+        let Ok(raw) = OpenOptions::new().read(true).write(true).open(&self.path) else {
+            return;
+        };
+        let mut cmd = [0u8; 64];
+        cmd[0] = 0x01;
+        cmd[1] = CMD_LOAD_DEFAULT_SETTINGS;
+        cmd[2] = 0;
+        if send_feature_report_via_ioctl(&raw, &cmd).is_ok() {
+            log::debug!("IMU disable sequence complete");
+        }
     }
 }
 
@@ -157,21 +171,6 @@ fn enable_imu_on_file(file: &std::fs::File) -> Result<(), DeviceError> {
 
     send_feature_report_via_ioctl(file, &cmd)?;
     log::debug!("IMU enable sequence complete");
-
-    Ok(())
-}
-
-/// Best-effort cleanup
-pub fn disable_imu_by_path(path: &str) -> Result<(), DeviceError> {
-    let raw_ = OpenOptions::new().read(true).write(true).open(path)?;
-    log::debug!("Sending IMU disable sequence...");
-
-    let mut cmd = [0u8; 64];
-    cmd[0] = 0x01;
-    cmd[1] = CMD_LOAD_DEFAULT_SETTINGS;
-    cmd[2] = 0;
-    send_feature_report_via_ioctl(&raw_, &cmd)?;
-    log::debug!("IMU disable sequence complete");
 
     Ok(())
 }
