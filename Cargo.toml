@@ -15,8 +15,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-cli = { path = "crates/cli" }
+scdsu-cli = { path = "crates/cli" }
 
 [[bin]]
 name = "steam-controller-dsu"
-path = "src/main.rs"
+path = "crates/cli/src/main.rs"

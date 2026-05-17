@@ -1,3 +1,3 @@
-fn main() {
-    cli::main();
+pub fn main() {
+    scdsu_cli::entrypoint();
 }
