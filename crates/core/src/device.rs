@@ -1,30 +1,44 @@
 use hidapi::{HidApi, HidDevice};
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use std::os::unix::io::AsRawFd;
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::errors::DeviceError;
 use crate::report;
 
-/// Combined handle: `hidapi` for reads, raw file for feature-report ioctls.
+const FEATURE_REPORT_SLEEP_MILLIS: u64 = 50;
+
+/// Combined handle: `hidapi` for reads, path stored so feature-report
+/// ioctls can be performed by temporarily reopening the raw hidraw node.
 pub struct Device {
     pub hid: HidDevice,
-    raw: Arc<Mutex<File>>,
+    path: String,
 }
 
 impl Device {
-    /// Cloneable handle to the raw file for use in other threads.
-    pub fn raw_file(&self) -> Arc<Mutex<File>> {
-        Arc::clone(&self.raw)
+    pub fn path(&self) -> &str {
+        &self.path
+    }
+
+    /// Enable raw accelerometer + gyroscope output.
+    pub fn enable_imu(&self) -> Result<(), DeviceError> {
+        let raw = OpenOptions::new().read(true).write(true).open(&self.path)?;
+        enable_imu_on_file(&raw)?;
+        Ok(())
     }
 }
 
-/// x86_64 Linux HIDIOCSFEATURE for a 64-byte buffer.
-const HIDIOCSFEATURE_64: libc::c_ulong = 0xC040_4806;
+/// Compute the HIDIOCSFEATURE ioctl number for a buffer length `len`.
+///
+/// `_IOC(_IOC_WRITE | _IOC_READ, 'H', 0x06, len)`
+fn hidiocsfeature(len: usize) -> libc::c_ulong {
+    let dir = 3u32; // _IOC_WRITE | _IOC_READ
+    ((dir << 30) | ((len as u32) << 16) | ((b'H' as u32) << 8) | 6u32) as libc::c_ulong
+}
 
-fn send_feature_ioctl(file: &File, data: &[u8; 64]) -> Result<(), std::io::Error> {
-    let ret = unsafe { libc::ioctl(file.as_raw_fd(), HIDIOCSFEATURE_64, data.as_ptr()) };
+fn send_feature_report_via_ioctl(file: &std::fs::File, data: &[u8]) -> Result<(), std::io::Error> {
+    // TODO: re-evaluate if we can do this with `hidapi` instead of raw
+    let ret = unsafe { libc::ioctl(file.as_raw_fd(), hidiocsfeature(data.len()), data.as_ptr()) };
     if ret < 0 {
         Err(std::io::Error::last_os_error())
     } else {
@@ -32,7 +46,7 @@ fn send_feature_ioctl(file: &File, data: &[u8; 64]) -> Result<(), std::io::Error
     }
 }
 
-/// Enumerate all vendor interfaces and return the first one that accepts feature reports.
+/// Enumerate all vendor interfaces and return the first one that opens.
 pub fn open_controller(api: &HidApi) -> Result<Device, DeviceError> {
     let candidates: Vec<_> = api
         .device_list()
@@ -53,19 +67,23 @@ pub fn open_controller(api: &HidApi) -> Result<Device, DeviceError> {
 
         log::debug!("Trying interface at {}", path);
 
-        let raw = OpenOptions::new().read(true).write(true).open(path)?;
         let hid = info.open_device(api)?;
 
-        // Try to clear digital mappings (Report ID 1)
-        // If this succeeds we have reason enough to believe the device is valid
+        // Probe with a feature report to verify the controller is actually
+        // connected and responsive. The dongle keeps the USB endpoint alive
+        // even when the controller is off.
+        let Ok(raw) = OpenOptions::new().read(true).write(true).open(path) else {
+            log::debug!("Could not open raw hidraw at {}", path);
+            continue;
+        };
         let mut probe = [0u8; 64];
         probe[0] = 0x01;
         probe[1] = report::commands::CLEAR_DIGITAL_MAPPINGS;
-        if send_feature_ioctl(&raw, &probe).is_ok() {
+        if send_feature_report_via_ioctl(&raw, &probe).is_ok() {
             log::info!("Opened controller on {}", path);
             return Ok(Device {
                 hid,
-                raw: Arc::new(Mutex::new(raw)),
+                path: path.to_string(),
             });
         }
         log::debug!("Interface at {} rejected feature report probe", path);
@@ -74,34 +92,34 @@ pub fn open_controller(api: &HidApi) -> Result<Device, DeviceError> {
     Err(DeviceError::NoDeviceFound)
 }
 
-/// Enable raw accelerometer + gyroscope output.
-pub fn enable_imu(file: &File) -> Result<(), DeviceError> {
+fn enable_imu_on_file(file: &std::fs::File) -> Result<(), DeviceError> {
     log::debug!("Sending IMU enable sequence...");
 
-    // 1. Clear digital button mappings (disable "lizard mode").
+    // Disable lizard mode
     let mut cmd = [0u8; 64];
     cmd[0] = 0x01;
     cmd[1] = report::commands::CLEAR_DIGITAL_MAPPINGS;
-    send_feature_ioctl(file, &cmd)?;
+    send_feature_report_via_ioctl(file, &cmd)?;
     log::trace!("Sent CLEAR_DIGITAL_MAPPINGS");
 
-    std::thread::sleep(Duration::from_millis(5));
+    std::thread::sleep(Duration::from_millis(FEATURE_REPORT_SLEEP_MILLIS));
 
-    // 2. Reset to factory defaults.
+    // Reset to factory defaults
     let mut cmd = [0u8; 64];
     cmd[0] = 0x01;
     cmd[1] = report::commands::LOAD_DEFAULT_SETTINGS;
     cmd[2] = 0;
-    send_feature_ioctl(file, &cmd)?;
+    send_feature_report_via_ioctl(file, &cmd)?;
     log::trace!("Sent LOAD_DEFAULT_SETTINGS");
 
-    std::thread::sleep(Duration::from_millis(5));
+    std::thread::sleep(Duration::from_millis(FEATURE_REPORT_SLEEP_MILLIS));
 
-    // 3. Disable trackpad mouse emulation and enable IMU raw data.
+    // Disable trackpad mouse emulation and enable IMU raw data
+    // This does not seem to interfere with steam input configurations somehow..
     let mut cmd = [0u8; 64];
     cmd[0] = 0x01;
     cmd[1] = report::commands::SET_SETTINGS_VALUES;
-    cmd[2] = 9; // 3 settings × 3 bytes each
+    cmd[2] = 9; // 3 settings x 3 bytes each
 
     cmd[3] = report::settings::LEFT_TRACKPAD_MODE;
     cmd[4] = (report::trackpad_modes::NONE & 0xFF) as u8;
@@ -116,8 +134,23 @@ pub fn enable_imu(file: &File) -> Result<(), DeviceError> {
     cmd[10] = (imu_mode & 0xFF) as u8;
     cmd[11] = (imu_mode >> 8) as u8;
 
-    send_feature_ioctl(file, &cmd)?;
+    send_feature_report_via_ioctl(file, &cmd)?;
     log::debug!("IMU enable sequence complete");
+
+    Ok(())
+}
+
+/// Best-effort cleanup
+pub fn disable_imu_by_path(path: &str) -> Result<(), DeviceError> {
+    let raw_ = OpenOptions::new().read(true).write(true).open(path)?;
+    log::debug!("Sending IMU disable sequence...");
+
+    let mut cmd = [0u8; 64];
+    cmd[0] = 0x01;
+    cmd[1] = report::commands::LOAD_DEFAULT_SETTINGS;
+    cmd[2] = 0;
+    send_feature_report_via_ioctl(&raw_, &cmd)?;
+    log::debug!("IMU disable sequence complete");
 
     Ok(())
 }

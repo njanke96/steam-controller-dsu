@@ -63,7 +63,7 @@ impl Reader {
                                 frozen_count += 1;
                                 if frozen_count == FROZEN_THRESHOLD {
                                     log::warn!(
-                                        "IMU data frozen ({} identical frames). Another process may have taken the controller.",
+                                        "IMU data frozen ({} identical frames). Steam likely disabled the gyro..",
                                         frozen_count
                                     );
                                 }

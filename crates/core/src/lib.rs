@@ -14,6 +14,7 @@ pub(crate) mod report;
 pub(crate) mod server;
 
 pub const READ_ATOMIC_BOOL_ORDERING: atomic::Ordering = atomic::Ordering::Relaxed;
+const CONTROLLER_OPEN_RETRY_DELAY_SEC: u64 = 5;
 
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
@@ -23,6 +24,17 @@ pub struct ServerConfig {
     pub port: u16,
     /// Invert the yaxis values on the gyro and accelerometer
     pub invert_y: bool,
+}
+
+/// Sleep in 100 ms increments while `running`.
+pub(crate) fn sleep_interruptible(running: &atomic::AtomicBool, total: Duration) {
+    let start = std::time::Instant::now();
+    while start.elapsed() < total {
+        if !running.load(READ_ATOMIC_BOOL_ORDERING) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(100).min(total - start.elapsed()));
+    }
 }
 
 /// Run the server loop until receiving a signal
@@ -47,9 +59,9 @@ pub fn run_server(
         };
 
         log::info!("Controller opened. Enabling IMU...");
-        if let Err(e) = device::enable_imu(&device.raw_file().lock().unwrap()) {
+        if let Err(e) = device.enable_imu() {
             log::error!("Failed to enable IMU: {e}");
-            std::thread::sleep(Duration::from_secs(3));
+            sleep_interruptible(&running, Duration::from_secs(3));
             continue;
         }
         log::info!(
@@ -58,6 +70,7 @@ pub fn run_server(
             config.port
         );
 
+        let path = device.path().to_string();
         let (reader, rx) = reader::Reader::start(running.clone(), device.hid);
 
         if let Err(e) = server::Server::run(rx, running.clone(), &config) {
@@ -66,12 +79,16 @@ pub fn run_server(
 
         reader.join();
 
+        if let Err(e) = device::disable_imu_by_path(&path) {
+            log::warn!("Failed to send IMU disable on disconnect: {e}");
+        }
+
         if !running.load(READ_ATOMIC_BOOL_ORDERING) {
             return Ok(());
         }
 
         log::info!("Server shut down. Waiting 3 seconds before reconnect...");
-        std::thread::sleep(Duration::from_secs(3));
+        sleep_interruptible(&running, Duration::from_secs(3));
     }
 }
 
@@ -83,9 +100,10 @@ pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceErro
     let device = device::open_controller(&api)?;
 
     log::info!("Controller opened. Enabling IMU...");
-    device::enable_imu(&device.raw_file().lock().unwrap())?;
-    log::info!("IMU enabled. Dumping frames (Ctrl-C to stop)...");
+    device.enable_imu()?;
+    log::info!("IMU enabled. Dumping frames...");
 
+    let path = device.path().to_string();
     let (reader, rx) = reader::Reader::start(running.clone(), device.hid);
 
     while running.load(READ_ATOMIC_BOOL_ORDERING) {
@@ -107,12 +125,17 @@ pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceErro
 
     drop(rx);
     reader.join();
+
+    if let Err(e) = device::disable_imu_by_path(&path) {
+        log::warn!("Failed to send IMU disable on disconnect: {e}");
+    }
+
     log::info!("Debug dump finished.");
     Ok(())
 }
 
 /// Open a controller with unlimited retries
-/// Returns `None` if interrupted
+/// Returns `None` if interrupted.
 fn open_controller_with_retry(
     running: Arc<atomic::AtomicBool>,
     api: &hidapi::HidApi,
@@ -125,13 +148,14 @@ fn open_controller_with_retry(
         match device::open_controller(api) {
             Ok(d) => return Some(d),
             Err(e) => {
-                log::warn!("Failed to open controller: {e}. Retrying in 5 seconds...");
-                for _ in 0..50 {
-                    if !running.load(READ_ATOMIC_BOOL_ORDERING) {
-                        return None;
-                    }
-                    std::thread::sleep(Duration::from_millis(100));
-                }
+                log::warn!(
+                    "Failed to open controller: {e}. Retrying in {} seconds...",
+                    CONTROLLER_OPEN_RETRY_DELAY_SEC
+                );
+                sleep_interruptible(
+                    &running,
+                    Duration::from_secs(CONTROLLER_OPEN_RETRY_DELAY_SEC),
+                );
             }
         }
     }
