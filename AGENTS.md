@@ -3,25 +3,12 @@
 ## Project Overview
 A Rust reimplementation of SteamDeckGyroDSU for the **new 2026 Steam Controller** (codename "Triton", USB VID `0x28de` / PID `0x1304`). It exposes motion data (accelerometer + gyroscope) via the CemuHook UDP protocol so emulators can use the controller's IMU.
 
-## Workspace Structure
-```
-steam-controller-dsu/
-├── Cargo.toml              # Workspace root, bin target steam-controller-dsu
-├── src/main.rs             # Delegates to cli::main()
-├── crates/
-│   ├── core/               # Library: all controller I/O lives here
-│   │   ├── src/
-│   │   │   ├── lib.rs
-│   │   │   ├── report.rs   # Constants (VID/PID, commands, scales)
-│   │   │   ├── device.rs   # Discovery, IMU enable via feature reports
-│   │   │   ├── frame.rs    # TritonFrame parser + unit conversion
-│   │   │   └── reader.rs   # Background thread -> mpsc::channel<TritonFrame>
-│   └── cli/                # Binary + library: clap args, debug dump mode
-│       └── src/
-│           ├── lib.rs      # Args { --debug, --name }
-│           └── main.rs     # Local binary entry point
-└── reference/              # Original SteamDeckGyroDSU C++ code
-```
+## Crates
+
+- `crates/cli`: CLI entrypoint for running the UDP server and debugging Steam Controller gyro output.
+  All code in this crate must directly involve the CLI interface. It should always be possible to replace this crate with another interface
+  such as a gui and have the exact same behavior under a different interface.
+- `crates/core`: Core library crate. All device reporting and UDP server logic lives in here, accessible through library functions.
 
 ## Critical Hardware Findings
 
@@ -85,7 +72,7 @@ Report ID 1, 64 bytes:
 
 Gyroscope outputs **angular velocity** (rate of change), not absolute orientation. CemuHook clients perform sensor fusion themselves.
 
-## Sources
+## Sources for reference
 1. **SDL `SDL_hidapi_steam.c`** — command IDs, retry logic, packet assembly, `ResetSteamController()` sequence.
    - `https://raw.githubusercontent.com/libsdl-org/SDL/main/src/joystick/hidapi/SDL_hidapi_steam.c`
 2. **SDL `controller_structs.h`** — `TritonMTUFull_t`, `TritonMTUIMU_t`, `FeatureReportMsg`, output report structs.
@@ -94,17 +81,15 @@ Gyroscope outputs **angular velocity** (rate of change), not absolute orientatio
    - `https://raw.githubusercontent.com/torvalds/linux/master/drivers/hid/hid-steam.c`
 4. **CemuHook Protocol Spec** — UDP packet formats, event types, CRC32 rules.
    - `https://v1993.github.io/cemuhook-protocol/`
-5. **Empirical testing** — `hid-recorder` output analysis, Python ioctl scripts to discover working feature-report format for `0x1304`.
-
-## CLI Flags
-| Flag | Behavior |
-|------|----------|
-| `--debug` | Open controller, enable IMU, dump frames in an infinite loop |
-| `--name <NAME>` | Print `hello <NAME>` and exit |
-| (none) | Print placeholder message and exit (DSU server not yet implemented) |
 
 ## Build
 ```bash
 cargo build
 cargo run --bin steam-controller-dsu -- --debug
 ```
+
+## Guidelines
+
+- Always use context7 MCP when available.
+- Run `cargo fmt` after any code changes, as well as `cargo clippy` for lints.
+- Avoid using `unwrap`, `expect`, or any methods that panic unless certain a panic is not possible in that context.
