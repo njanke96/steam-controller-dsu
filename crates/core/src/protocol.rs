@@ -99,11 +99,11 @@ pub fn write_data_event(
 
     // SharedResponse (11 bytes, offset 20)
     buf[20] = slot; // slot requested by client
-    buf[21] = 2;    // slotState = connected
-    buf[22] = 2;    // deviceModel = full gyro
-    buf[23] = 1;    // connection = USB
+    buf[21] = 2; // slotState = connected
+    buf[22] = 2; // deviceModel = full gyro
+    buf[23] = 1; // connection = USB
     // mac1/mac2/battery already zero
-    buf[31] = 1;    // connected
+    buf[31] = 1; // connected
 
     // packetNumber (offset 32)
     buf[32..36].copy_from_slice(&packet_num.to_le_bytes());

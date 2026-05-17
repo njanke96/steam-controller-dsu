@@ -1,7 +1,7 @@
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc::Receiver, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc::Receiver};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -27,11 +27,7 @@ pub struct Server;
 impl Server {
     /// Start the CemuHook UDP server on `bind_addr` and broadcast frames
     /// received on `rx` to all subscribed clients.
-    pub fn run(
-        bind_addr: SocketAddr,
-        rx: Receiver<TritonFrame>,
-        invert_y: bool,
-    ) -> io::Result<()> {
+    pub fn run(bind_addr: SocketAddr, rx: Receiver<TritonFrame>, invert_y: bool) -> io::Result<()> {
         let socket = UdpSocket::bind(bind_addr)?;
         socket.set_read_timeout(Some(Duration::from_secs(1)))?;
         log::info!("CemuHook server listening on {}", bind_addr);
@@ -109,18 +105,9 @@ fn recv_loop(
                             // Report our single controller as connected on every
                             // requested slot so clients don't have to be
                             // configured for slot 0 specifically.
-                            protocol::write_info_response(
-                                &mut info_buf,
-                                slot,
-                                client_id,
-                                true,
-                            );
+                            protocol::write_info_response(&mut info_buf, slot, client_id, true);
                             if let Err(e) = socket.send_to(&info_buf, addr) {
-                                log::warn!(
-                                    "Failed to send info response to {}: {}",
-                                    addr,
-                                    e
-                                );
+                                log::warn!("Failed to send info response to {}: {}", addr, e);
                             }
                         }
                     }
@@ -223,8 +210,12 @@ fn send_loop(
                 "Packet {} to {}: accel=({:.3}, {:.3}, {:.3}) gyro=({:.1}, {:.1}, {:.1})",
                 client.packet_counter,
                 client.addr,
-                ax, ay, az,
-                gx, gy, gz
+                ax,
+                ay,
+                az,
+                gx,
+                gy,
+                gz
             );
 
             if let Err(e) = socket.send_to(&packet_buf, client.addr) {
@@ -242,7 +233,11 @@ fn prune_clients(clients: &Arc<Mutex<Vec<Client>>>) {
     list.retain(|c| c.last_seen.elapsed() < CLIENT_TIMEOUT);
     let after = list.len();
     if before != after {
-        log::info!("Pruned {} stale client(s), {} remaining", before - after, after);
+        log::info!(
+            "Pruned {} stale client(s), {} remaining",
+            before - after,
+            after
+        );
     }
 }
 

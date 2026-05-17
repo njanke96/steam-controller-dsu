@@ -35,9 +35,7 @@ pub fn main() {
     run_server(args.bind_addr, args.port, args.invert_y);
 }
 
-fn open_controller_with_retry(
-    api: &scdsu_core::hidapi::HidApi,
-) -> scdsu_core::device::Device {
+fn open_controller_with_retry(api: &scdsu_core::hidapi::HidApi) -> scdsu_core::device::Device {
     loop {
         match scdsu_core::device::open_controller(api) {
             Ok(d) => return d,
@@ -50,11 +48,10 @@ fn open_controller_with_retry(
 }
 
 fn run_server(bind_addr: String, port: u16, invert_y: bool) {
-    let addr = SocketAddr::from_str(&format!("{}:{}", bind_addr, port))
-        .unwrap_or_else(|e| {
-            log::error!("Invalid bind address '{}:{}': {}", bind_addr, port, e);
-            std::process::exit(1);
-        });
+    let addr = SocketAddr::from_str(&format!("{}:{}", bind_addr, port)).unwrap_or_else(|e| {
+        log::error!("Invalid bind address '{}:{}': {}", bind_addr, port, e);
+        std::process::exit(1);
+    });
 
     let mut api = match scdsu_core::hidapi::HidApi::new() {
         Ok(api) => api,

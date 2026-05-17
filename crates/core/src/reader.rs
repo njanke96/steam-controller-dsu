@@ -1,7 +1,7 @@
+use crate::frame::TritonFrame;
 use hidapi::HidDevice;
 use std::sync::mpsc;
 use std::thread;
-use crate::frame::TritonFrame;
 
 /// Number of consecutive identical IMU frames before logging a warning.
 const FROZEN_THRESHOLD: usize = 100;
@@ -19,9 +19,7 @@ pub struct Reader {
 
 impl Reader {
     /// Spawn a thread that reads from `device` and sends parsed frames over the returned channel.
-    pub fn start(
-        hid: HidDevice,
-    ) -> (Self, mpsc::Receiver<TritonFrame>) {
+    pub fn start(hid: HidDevice) -> (Self, mpsc::Receiver<TritonFrame>) {
         let (tx, rx) = mpsc::channel::<TritonFrame>();
 
         let handle = thread::spawn(move || {
@@ -98,7 +96,10 @@ impl Reader {
                                 break;
                             }
                         } else {
-                            log::trace!("Ignoring non-Triton report (first byte: 0x{:02x})", buf[0]);
+                            log::trace!(
+                                "Ignoring non-Triton report (first byte: 0x{:02x})",
+                                buf[0]
+                            );
                         }
                     }
                     Ok(n) => {
@@ -112,7 +113,10 @@ impl Reader {
                 }
 
                 if fail_count >= DISCONNECT_THRESHOLD {
-                    log::warn!("Controller appears disconnected ({} consecutive read failures). Exiting reader.", fail_count);
+                    log::warn!(
+                        "Controller appears disconnected ({} consecutive read failures). Exiting reader.",
+                        fail_count
+                    );
                     break;
                 }
             }
@@ -120,7 +124,12 @@ impl Reader {
             log::debug!("Reader thread finished after {} frames", total_frames);
         });
 
-        (Self { handle: Some(handle) }, rx)
+        (
+            Self {
+                handle: Some(handle),
+            },
+            rx,
+        )
     }
 
     /// Block until the background thread finishes.
