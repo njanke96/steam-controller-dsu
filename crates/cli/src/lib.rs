@@ -9,10 +9,6 @@ pub struct Args {
     #[arg(long)]
     pub debug: bool,
 
-    /// Say hello to NAME instead of running the DSU server.
-    #[arg(long)]
-    pub name: Option<String>,
-
     /// UDP bind address for the CemuHook server.
     #[arg(long, default_value = "0.0.0.0")]
     pub bind_addr: String,
@@ -20,6 +16,10 @@ pub struct Args {
     /// UDP port for the CemuHook server.
     #[arg(long, default_value_t = 26760)]
     pub port: u16,
+
+    /// Invert the pitch axis (opposite of Nintendo Switch behavior).
+    #[arg(long)]
+    pub invert_y: bool,
 }
 
 pub fn main() {
@@ -27,17 +27,12 @@ pub fn main() {
 
     let args = Args::parse();
 
-    if let Some(name) = args.name {
-        println!("hello {name}");
-        return;
-    }
-
     if args.debug {
         run_debug_dump();
         return;
     }
 
-    run_server(args.bind_addr, args.port);
+    run_server(args.bind_addr, args.port, args.invert_y);
 }
 
 fn open_controller_with_retry(
@@ -54,7 +49,7 @@ fn open_controller_with_retry(
     }
 }
 
-fn run_server(bind_addr: String, port: u16) {
+fn run_server(bind_addr: String, port: u16, invert_y: bool) {
     let addr = SocketAddr::from_str(&format!("{}:{}", bind_addr, port))
         .unwrap_or_else(|e| {
             log::error!("Invalid bind address '{}:{}': {}", bind_addr, port, e);
@@ -85,7 +80,7 @@ fn run_server(bind_addr: String, port: u16) {
 
         let (reader, rx) = scdsu_core::reader::Reader::start(device.hid);
 
-        if let Err(e) = scdsu_core::server::Server::run(addr, rx) {
+        if let Err(e) = scdsu_core::server::Server::run(addr, rx, invert_y) {
             log::error!("Server error: {e}");
         }
 

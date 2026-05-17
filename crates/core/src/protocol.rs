@@ -85,6 +85,7 @@ pub fn write_data_event(
     client_id: u32,
     slot: u8,
     timestamp_us: u64,
+    invert_y: bool,
 ) {
     buf.fill(0);
 
@@ -113,17 +114,20 @@ pub fn write_data_event(
     buf[68..76].copy_from_slice(&timestamp_us.to_le_bytes());
 
     // Accelerometer in g (offset 76).
-    // The reference SteamDeckGyroDSU negates X and Y to match the Deck's
-    // physical orientation relative to CemuHook expectations.
+    // Steam Controller IMU orientation matches CemuHook expectations.
+    // With invert_y: accY is not negated (opposite of Nintendo Switch).
     let (ax, ay, az) = frame.accel_g();
     buf[76..80].copy_from_slice(&(-ax).to_le_bytes());
-    buf[80..84].copy_from_slice(&(-ay).to_le_bytes());
+    let acc_y = if invert_y { ay } else { -ay };
+    buf[80..84].copy_from_slice(&acc_y.to_le_bytes());
     buf[84..88].copy_from_slice(&az.to_le_bytes());
 
     // Gyroscope in deg/s (offset 88).
-    // Reference mapping: pitch = gyroX, yaw = -gyroY, roll = gyroZ.
+    // Steam Controller mapping: yaw = -gyroY, roll = gyroZ
+    // Pitch: -gx (Nintendo Switch style) or gx (invert_y).
     let (gx, gy, gz) = frame.gyro_dps();
-    buf[88..92].copy_from_slice(&gx.to_le_bytes());
+    let pitch = if invert_y { gx } else { -gx };
+    buf[88..92].copy_from_slice(&pitch.to_le_bytes());
     buf[92..96].copy_from_slice(&(-gy).to_le_bytes());
     buf[96..100].copy_from_slice(&gz.to_le_bytes());
 

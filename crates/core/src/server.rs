@@ -27,7 +27,11 @@ pub struct Server;
 impl Server {
     /// Start the CemuHook UDP server on `bind_addr` and broadcast frames
     /// received on `rx` to all subscribed clients.
-    pub fn run(bind_addr: SocketAddr, rx: Receiver<TritonFrame>) -> io::Result<()> {
+    pub fn run(
+        bind_addr: SocketAddr,
+        rx: Receiver<TritonFrame>,
+        invert_y: bool,
+    ) -> io::Result<()> {
         let socket = UdpSocket::bind(bind_addr)?;
         socket.set_read_timeout(Some(Duration::from_secs(1)))?;
         log::info!("CemuHook server listening on {}", bind_addr);
@@ -40,7 +44,7 @@ impl Server {
         let send_clients = Arc::clone(&clients);
         let send_shutdown = Arc::clone(&shutdown);
         let send_handle = thread::spawn(move || {
-            send_loop(send_socket, rx, send_clients, send_shutdown);
+            send_loop(send_socket, rx, send_clients, send_shutdown, invert_y);
         });
 
         // Run recv loop on this thread.
@@ -176,6 +180,7 @@ fn send_loop(
     rx: Receiver<TritonFrame>,
     clients: Arc<Mutex<Vec<Client>>>,
     shutdown: Arc<AtomicBool>,
+    invert_y: bool,
 ) {
     let mut packet_buf = [0u8; 100];
     let mut timestamp_us: u64 = 0;
@@ -209,6 +214,7 @@ fn send_loop(
                 client.id,
                 client.slot,
                 timestamp_us,
+                invert_y,
             );
 
             let (ax, ay, az) = frame.accel_g();
