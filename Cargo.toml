@@ -1,10 +1,3 @@
-[workspace]
-members = ["crates/core", "crates/cli"]
-resolver = "3"
-
-[workspace.dependencies]
-log = "0.4"
-
 [package]
 name = "steam-controller-dsu"
 version = "0.1.0"
@@ -16,3 +9,10 @@ scdsu-cli = { path = "crates/cli" }
 [[bin]]
 name = "steam-controller-dsu"
 path = "crates/cli/src/main.rs"
+
+[workspace]
+members = ["crates/core", "crates/cli"]
+resolver = "3"
+
+[workspace.dependencies]
+log = "0.4"
