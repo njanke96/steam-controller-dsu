@@ -30,16 +30,16 @@ pub fn run_server(bind_addr: String, port: u16, invert_y: bool) {
         let device = open_controller_with_retry(&api);
 
         log::info!("Controller opened. Enabling IMU...");
-        if let Err(e) = crate::device::enable_imu(&device.raw_file().lock().unwrap()) {
+        if let Err(e) = device::enable_imu(&device.raw_file().lock().unwrap()) {
             log::error!("Failed to enable IMU: {e}");
             std::thread::sleep(Duration::from_secs(3));
             continue;
         }
         log::info!("IMU enabled. Starting CemuHook server on {} ...", addr);
 
-        let (reader, rx) = crate::reader::Reader::start(device.hid);
+        let (reader, rx) = reader::Reader::start(device.hid);
 
-        if let Err(e) = crate::server::Server::run(addr, rx, invert_y) {
+        if let Err(e) = server::Server::run(addr, rx, invert_y) {
             log::error!("Server error: {e}");
         }
 
@@ -61,13 +61,13 @@ pub fn run_debug_dump() {
     let device = open_controller_with_retry(&api);
 
     log::info!("Controller opened. Enabling IMU...");
-    if let Err(e) = crate::device::enable_imu(&device.raw_file().lock().unwrap()) {
+    if let Err(e) = device::enable_imu(&device.raw_file().lock().unwrap()) {
         log::error!("Failed to enable IMU: {e}");
         return;
     }
     log::info!("IMU enabled. Dumping frames (Ctrl-C to stop)...");
 
-    let (reader, rx) = crate::reader::Reader::start(device.hid);
+    let (reader, rx) = reader::Reader::start(device.hid);
 
     loop {
         match rx.recv() {
@@ -91,9 +91,9 @@ pub fn run_debug_dump() {
     log::info!("Debug dump finished.");
 }
 
-fn open_controller_with_retry(api: &hidapi::HidApi) -> crate::device::Device {
+fn open_controller_with_retry(api: &hidapi::HidApi) -> device::Device {
     loop {
-        match crate::device::open_controller(api) {
+        match device::open_controller(api) {
             Ok(d) => return d,
             Err(e) => {
                 log::warn!("Failed to open controller: {e}. Retrying in 5 seconds...");
