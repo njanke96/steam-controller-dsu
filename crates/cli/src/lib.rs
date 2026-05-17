@@ -68,7 +68,7 @@ fn run_server(bind_addr: String, port: u16, invert_y: bool) {
         let device = open_controller_with_retry(&api);
 
         log::info!("Controller opened. Enabling IMU...");
-        if let Err(e) = scdsu_core::device::enable_imu(&*device.raw_file().lock().unwrap()) {
+        if let Err(e) = scdsu_core::device::enable_imu(&device.raw_file().lock().unwrap()) {
             log::error!("Failed to enable IMU: {e}");
             std::thread::sleep(Duration::from_secs(3));
             continue;
@@ -99,7 +99,7 @@ fn run_debug_dump() {
     let device = open_controller_with_retry(&api);
 
     log::info!("Controller opened. Enabling IMU...");
-    if let Err(e) = scdsu_core::device::enable_imu(&*device.raw_file().lock().unwrap()) {
+    if let Err(e) = scdsu_core::device::enable_imu(&device.raw_file().lock().unwrap()) {
         log::error!("Failed to enable IMU: {e}");
         return;
     }

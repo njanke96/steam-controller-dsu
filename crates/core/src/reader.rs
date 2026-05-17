@@ -78,7 +78,7 @@ impl Reader {
                             }
                             frozen_count = 0;
 
-                            if total_frames % 100 == 0 {
+                            if total_frames.is_multiple_of(100) {
                                 log::debug!(
                                     "Reader: frame {} sent, seq={}, gyro=({},{},{})",
                                     total_frames,
