@@ -1,14 +1,14 @@
-/// Input report ID for the Triton full-state packet.
+/// Input report ID for the Triton full-state packet
 pub const REPORT_ID_TRITON_FULL: u8 = 0x42;
 
-/// Total HID report length (including Report ID).
+/// Total HID report length (including Report ID)
 pub const REPORT_SIZE: usize = 54;
 
-/// Sensor scale factors (same as Steam Deck).
+/// Sensor scale factors
 pub const ACCEL_PER_G: f32 = 16384.0;
 pub const GYRO_PER_DPS: f32 = 16.0;
 
-/// Parsed Triton full-state frame (Report ID 0x42).
+/// Parsed Triton full-state frame
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TritonFrame {
     pub seq_num: u8,

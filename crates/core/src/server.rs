@@ -5,6 +5,8 @@ use std::sync::{Arc, Mutex, mpsc::Receiver};
 use std::thread;
 use std::time::{Duration, Instant};
 
+// TODO: Unsloppify this module
+
 use crate::frame::TritonFrame;
 use crate::{READ_ATOMIC_BOOL_ORDERING, ServerConfig, dsu};
 

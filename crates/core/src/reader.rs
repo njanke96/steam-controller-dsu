@@ -6,6 +6,8 @@ use crate::devices::device;
 use crate::errors::DeviceError;
 use crate::frame::TritonFrame;
 
+// TODO: Separate concerns in this module, make sure it includes nothng specific to the device itself.
+
 /// Number of consecutive identical IMU frames before logging a warning.
 const FROZEN_THRESHOLD: usize = 100;
 /// Number of frozen frames before giving up and exiting (~5 seconds at 100Hz).
@@ -15,7 +17,7 @@ const FROZEN_EXIT_THRESHOLD: usize = 500;
 /// At 100Hz this is ~1 second of no data.
 const DISCONNECT_THRESHOLD: usize = 10;
 
-/// Background reader that continuously parses Triton frames from the controller.
+/// Background reader that continuously parses Triton frames from a device
 pub struct Reader {
     handle: Option<thread::JoinHandle<()>>,
 }
