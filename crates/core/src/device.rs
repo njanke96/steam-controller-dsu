@@ -4,7 +4,30 @@ use std::os::unix::io::AsRawFd;
 use std::time::Duration;
 
 use crate::errors::DeviceError;
-use crate::report;
+
+/// Steam Controller vendor/product IDs.
+pub const VID: u16 = 0x28de;
+pub const PID: u16 = 0x1304;
+
+/// HID usage page for the vendor-defined gamepad interface.
+pub const USAGE_PAGE_VENDOR: u16 = 0xFF00;
+
+/// Feature report command IDs (shared with Steam Deck / old controller).
+pub const CMD_CLEAR_DIGITAL_MAPPINGS: u8 = 0x81;
+pub const CMD_LOAD_DEFAULT_SETTINGS: u8 = 0x8E;
+pub const CMD_SET_SETTINGS_VALUES: u8 = 0x87;
+
+/// Setting register IDs.
+pub const SETTING_LEFT_TRACKPAD_MODE: u8 = 0x07;
+pub const SETTING_RIGHT_TRACKPAD_MODE: u8 = 0x08;
+pub const SETTING_IMU_MODE: u8 = 0x30;
+
+/// Trackpad mode values.
+pub const MODE_NONE: u16 = 0x07;
+
+/// IMU mode bitflags.
+pub const IMU_MODE_SEND_RAW_ACCEL: u16 = 0x08;
+pub const IMU_MODE_SEND_RAW_GYRO: u16 = 0x10;
 
 const FEATURE_REPORT_SLEEP_MILLIS: u64 = 50;
 
@@ -51,9 +74,7 @@ pub fn open_controller(api: &HidApi) -> Result<Device, DeviceError> {
     let candidates: Vec<_> = api
         .device_list()
         .filter(|d| {
-            d.vendor_id() == report::VID
-                && d.product_id() == report::PID
-                && d.usage_page() == report::USAGE_PAGE_VENDOR
+            d.vendor_id() == VID && d.product_id() == PID && d.usage_page() == USAGE_PAGE_VENDOR
         })
         .collect();
 
@@ -78,7 +99,7 @@ pub fn open_controller(api: &HidApi) -> Result<Device, DeviceError> {
         };
         let mut probe = [0u8; 64];
         probe[0] = 0x01;
-        probe[1] = report::commands::CLEAR_DIGITAL_MAPPINGS;
+        probe[1] = CMD_CLEAR_DIGITAL_MAPPINGS;
         if send_feature_report_via_ioctl(&raw, &probe).is_ok() {
             log::info!("Opened controller on {}", path);
             return Ok(Device {
@@ -98,7 +119,7 @@ fn enable_imu_on_file(file: &std::fs::File) -> Result<(), DeviceError> {
     // Disable lizard mode
     let mut cmd = [0u8; 64];
     cmd[0] = 0x01;
-    cmd[1] = report::commands::CLEAR_DIGITAL_MAPPINGS;
+    cmd[1] = CMD_CLEAR_DIGITAL_MAPPINGS;
     send_feature_report_via_ioctl(file, &cmd)?;
     log::trace!("Sent CLEAR_DIGITAL_MAPPINGS");
 
@@ -107,7 +128,7 @@ fn enable_imu_on_file(file: &std::fs::File) -> Result<(), DeviceError> {
     // Reset to factory defaults
     let mut cmd = [0u8; 64];
     cmd[0] = 0x01;
-    cmd[1] = report::commands::LOAD_DEFAULT_SETTINGS;
+    cmd[1] = CMD_LOAD_DEFAULT_SETTINGS;
     cmd[2] = 0;
     send_feature_report_via_ioctl(file, &cmd)?;
     log::trace!("Sent LOAD_DEFAULT_SETTINGS");
@@ -118,19 +139,19 @@ fn enable_imu_on_file(file: &std::fs::File) -> Result<(), DeviceError> {
     // This does not seem to interfere with steam input configurations somehow..
     let mut cmd = [0u8; 64];
     cmd[0] = 0x01;
-    cmd[1] = report::commands::SET_SETTINGS_VALUES;
+    cmd[1] = CMD_SET_SETTINGS_VALUES;
     cmd[2] = 9; // 3 settings x 3 bytes each
 
-    cmd[3] = report::settings::LEFT_TRACKPAD_MODE;
-    cmd[4] = (report::trackpad_modes::NONE & 0xFF) as u8;
-    cmd[5] = (report::trackpad_modes::NONE >> 8) as u8;
+    cmd[3] = SETTING_LEFT_TRACKPAD_MODE;
+    cmd[4] = (MODE_NONE & 0xFF) as u8;
+    cmd[5] = (MODE_NONE >> 8) as u8;
 
-    cmd[6] = report::settings::RIGHT_TRACKPAD_MODE;
-    cmd[7] = (report::trackpad_modes::NONE & 0xFF) as u8;
-    cmd[8] = (report::trackpad_modes::NONE >> 8) as u8;
+    cmd[6] = SETTING_RIGHT_TRACKPAD_MODE;
+    cmd[7] = (MODE_NONE & 0xFF) as u8;
+    cmd[8] = (MODE_NONE >> 8) as u8;
 
-    let imu_mode = report::imu_modes::SEND_RAW_ACCEL | report::imu_modes::SEND_RAW_GYRO;
-    cmd[9] = report::settings::IMU_MODE;
+    let imu_mode = IMU_MODE_SEND_RAW_ACCEL | IMU_MODE_SEND_RAW_GYRO;
+    cmd[9] = SETTING_IMU_MODE;
     cmd[10] = (imu_mode & 0xFF) as u8;
     cmd[11] = (imu_mode >> 8) as u8;
 
@@ -147,7 +168,7 @@ pub fn disable_imu_by_path(path: &str) -> Result<(), DeviceError> {
 
     let mut cmd = [0u8; 64];
     cmd[0] = 0x01;
-    cmd[1] = report::commands::LOAD_DEFAULT_SETTINGS;
+    cmd[1] = CMD_LOAD_DEFAULT_SETTINGS;
     cmd[2] = 0;
     send_feature_report_via_ioctl(&raw_, &cmd)?;
     log::debug!("IMU disable sequence complete");

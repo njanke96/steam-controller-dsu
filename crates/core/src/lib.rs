@@ -10,7 +10,6 @@ pub(crate) mod device;
 pub(crate) mod frame;
 pub(crate) mod protocol;
 pub(crate) mod reader;
-pub(crate) mod report;
 pub(crate) mod server;
 
 pub const READ_ATOMIC_BOOL_ORDERING: atomic::Ordering = atomic::Ordering::Relaxed;

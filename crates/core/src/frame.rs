@@ -1,4 +1,12 @@
-use crate::report;
+/// Input report ID for the Triton full-state packet.
+pub const REPORT_ID_TRITON_FULL: u8 = 0x42;
+
+/// Total HID report length (including Report ID).
+pub const REPORT_SIZE: usize = 54;
+
+/// Sensor scale factors (same as Steam Deck).
+pub const ACCEL_PER_G: f32 = 16384.0;
+pub const GYRO_PER_DPS: f32 = 16.0;
 
 /// Parsed Triton full-state frame (Report ID 0x42).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -31,8 +39,8 @@ pub struct TritonFrame {
 }
 
 impl TritonFrame {
-    pub const REPORT_ID: u8 = report::REPORT_ID_TRITON_FULL;
-    pub const REPORT_SIZE: usize = report::REPORT_SIZE;
+    pub const REPORT_ID: u8 = REPORT_ID_TRITON_FULL;
+    pub const REPORT_SIZE: usize = REPORT_SIZE;
 
     /// Parse a raw HID report.  `data` must include the Report ID byte.
     pub fn parse(data: &[u8]) -> Option<Self> {
@@ -72,18 +80,18 @@ impl TritonFrame {
     /// Accelerometer in g (same scale as Steam Deck).
     pub fn accel_g(&self) -> (f32, f32, f32) {
         (
-            self.accel_x as f32 / report::ACCEL_PER_G,
-            self.accel_y as f32 / report::ACCEL_PER_G,
-            self.accel_z as f32 / report::ACCEL_PER_G,
+            self.accel_x as f32 / ACCEL_PER_G,
+            self.accel_y as f32 / ACCEL_PER_G,
+            self.accel_z as f32 / ACCEL_PER_G,
         )
     }
 
     /// Gyroscope in degrees per second (same scale as Steam Deck).
     pub fn gyro_dps(&self) -> (f32, f32, f32) {
         (
-            self.gyro_x as f32 / report::GYRO_PER_DPS,
-            self.gyro_y as f32 / report::GYRO_PER_DPS,
-            self.gyro_z as f32 / report::GYRO_PER_DPS,
+            self.gyro_x as f32 / GYRO_PER_DPS,
+            self.gyro_y as f32 / GYRO_PER_DPS,
+            self.gyro_z as f32 / GYRO_PER_DPS,
         )
     }
 
