@@ -139,6 +139,8 @@ fn open_controller_with_retry(
     running: Arc<atomic::AtomicBool>,
     api: &hidapi::HidApi,
 ) -> Option<devices::linux_device::LinuxDevice> {
+    // TODO: Support multiple devices, return impl `Device`
+
     loop {
         if !running.load(READ_ATOMIC_BOOL_ORDERING) {
             return None;

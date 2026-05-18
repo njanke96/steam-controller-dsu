@@ -34,7 +34,7 @@ pub struct Server {
     socket: UdpSocket,
 }
 
-// TODO: send and recv loop to impl, break up functions and avoid deep nesting
+// TODO: send and recv loop to impl, break up functions and avoid deep indentation
 
 impl Server {
     /// Start the CemuHook UDP server on `bind_addr` and broadcast frames
