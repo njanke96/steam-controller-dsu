@@ -1,12 +1,6 @@
 #[cfg(target_os = "windows")]
 compile_error!("This crate does not support Windows.");
 
-use std::sync::Arc;
-use std::sync::atomic;
-use std::time::Duration;
-
-use crate::errors::{DeviceError, ServerError};
-
 pub mod errors;
 
 pub(crate) mod devices;
@@ -14,6 +8,13 @@ pub(crate) mod dsu;
 pub(crate) mod frame;
 pub(crate) mod reader;
 pub(crate) mod server;
+
+use std::sync::Arc;
+use std::sync::atomic;
+use std::time::Duration;
+
+use crate::errors::{DeviceError, ServerError};
+use crate::reader::Reader;
 
 pub const READ_ATOMIC_BOOL_ORDERING: atomic::Ordering = atomic::Ordering::Relaxed;
 const CONTROLLER_OPEN_RETRY_DELAY_SEC: u64 = 5;
@@ -72,13 +73,13 @@ pub fn run_server(
             config.port
         );
 
-        let (reader, rx) = reader::Reader::start(running.clone(), device);
+        let (reader, rx) = Reader::start(running.clone(), device);
 
         if let Err(e) = server::Server::run(rx, running.clone(), &config) {
             log::error!("Server error: {e}");
         }
 
-        reader.join();
+        let _ = reader.join();
 
         if !running.load(READ_ATOMIC_BOOL_ORDERING) {
             return Ok(());
@@ -100,7 +101,7 @@ pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceErro
     device.enable_imu()?;
     log::info!("IMU enabled. Dumping frames...");
 
-    let (reader, rx) = reader::Reader::start(running.clone(), device);
+    let (reader, rx) = Reader::start(running.clone(), device);
 
     while running.load(READ_ATOMIC_BOOL_ORDERING) {
         match rx.recv() {
@@ -120,7 +121,7 @@ pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceErro
     }
 
     drop(rx);
-    reader.join();
+    let _ = reader.join();
 
     log::info!("Debug dump finished.");
     Ok(())
