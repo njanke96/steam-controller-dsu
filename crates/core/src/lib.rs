@@ -19,6 +19,7 @@ use crate::reader::Reader;
 pub const READ_ATOMIC_BOOL_ORDERING: atomic::Ordering = atomic::Ordering::Relaxed;
 const CONTROLLER_OPEN_RETRY_DELAY_SEC: u64 = 5;
 
+// TODO: Move to server.rs
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
     /// Address or host to bind to
@@ -75,11 +76,14 @@ pub fn run_server(
 
         let (reader, rx) = Reader::start(running.clone(), device);
 
+        // TODO: Join the server send loop thread here, consistency with reader?
         if let Err(e) = server::Server::run(rx, running.clone(), &config) {
             log::error!("Server error: {e}");
         }
 
-        let _ = reader.join();
+        if let Err(err) = reader.join() {
+            log::error!("Reader thread panicked: {err:?}");
+        }
 
         if !running.load(READ_ATOMIC_BOOL_ORDERING) {
             return Ok(());
@@ -121,7 +125,9 @@ pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceErro
     }
 
     drop(rx);
-    let _ = reader.join();
+    if let Err(err) = reader.join() {
+        log::error!("Reader thread panicked: {err:?}");
+    }
 
     log::info!("Debug dump finished.");
     Ok(())

@@ -1,3 +1,5 @@
+// TODO: Move this to devices/triton and leave a more agnostic frame struct in its place
+
 /// Input report ID for the Triton full-state packet
 pub const REPORT_ID_TRITON_FULL: u8 = 0x42;
 

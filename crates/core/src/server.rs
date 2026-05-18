@@ -1,7 +1,7 @@
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, mpsc::Receiver};
+use std::sync::atomic;
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -24,14 +24,24 @@ struct Client {
     packet_counter: u32,
 }
 
-pub struct Server;
+// TODO: Use the data in the struct
+pub struct Server {
+    rx: mpsc::Receiver<TritonFrame>, // TODO: More agnostic struct for frame data, not device specific
+    main_thread_running: Arc<atomic::AtomicBool>,
+    server_thread_running: Arc<atomic::AtomicBool>,
+    clients: Arc<Mutex<Vec<Client>>>,
+    config: ServerConfig,
+    socket: UdpSocket,
+}
+
+// TODO: send and recv loop to impl, break up functions and avoid deep nesting
 
 impl Server {
     /// Start the CemuHook UDP server on `bind_addr` and broadcast frames
     /// received on `rx` to all subscribed CemuHook clients.
     pub fn run(
-        rx: Receiver<TritonFrame>,
-        running: Arc<AtomicBool>,
+        rx: mpsc::Receiver<TritonFrame>,
+        running: Arc<atomic::AtomicBool>,
         config: &ServerConfig,
     ) -> io::Result<()> {
         let addr = format!("{}:{}", config.bind_addr, config.port);
@@ -41,7 +51,7 @@ impl Server {
         log::info!("CemuHook server listening on {}", addr);
 
         let clients: Arc<Mutex<Vec<Client>>> = Arc::new(Mutex::new(Vec::new()));
-        let shutdown = Arc::new(AtomicBool::new(false));
+        let shutdown = Arc::new(atomic::AtomicBool::new(false));
 
         // Spawn send thread.
         let send_socket = socket.try_clone()?;
@@ -74,10 +84,10 @@ impl Server {
 }
 
 fn recv_loop(
-    main_running: Arc<AtomicBool>,
+    main_running: Arc<atomic::AtomicBool>,
     socket: UdpSocket,
     clients: Arc<Mutex<Vec<Client>>>,
-    shutdown: Arc<AtomicBool>,
+    shutdown: Arc<atomic::AtomicBool>,
 ) -> io::Result<()> {
     let mut buf = [0u8; 256];
     let mut version_buf = [0u8; 22];
@@ -187,11 +197,11 @@ fn recv_loop(
 }
 
 fn send_loop(
-    main_running: Arc<AtomicBool>,
+    main_running: Arc<atomic::AtomicBool>,
     socket: UdpSocket,
-    rx: Receiver<TritonFrame>,
+    rx: mpsc::Receiver<TritonFrame>,
     clients: Arc<Mutex<Vec<Client>>>,
-    shutdown: Arc<AtomicBool>,
+    shutdown: Arc<atomic::AtomicBool>,
     config: ServerConfig,
 ) {
     let mut packet_buf = [0u8; 100];
@@ -207,7 +217,7 @@ fn send_loop(
             Ok(f) => f,
             Err(_) => {
                 log::debug!("Frame channel closed, send loop exiting");
-                shutdown.store(true, Ordering::SeqCst);
+                shutdown.store(true, atomic::Ordering::SeqCst);
                 break;
             }
         };

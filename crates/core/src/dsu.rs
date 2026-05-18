@@ -55,10 +55,10 @@ pub fn write_info_response(buf: &mut [u8], slot: u8, client_id: u32, connected: 
 }
 
 /// Build a CemuHook data-event packet (100 bytes) from a `TritonFrame`.
-/// Buttons / sticks / touch are zeroed — only motion data is populated.
+/// Buttons / sticks / touch are intentionally zeroed
 pub fn write_data_event(
     buf: &mut [u8; 100],
-    frame: &crate::frame::TritonFrame,
+    frame: &crate::frame::TritonFrame, // TODO: Use a more agnostic struct for frame data, not device specific
     packet_num: u32,
     client_id: u32,
     slot: u8,
@@ -86,7 +86,7 @@ pub fn write_data_event(
     // packetNumber (offset 32)
     buf[32..36].copy_from_slice(&packet_num.to_le_bytes());
 
-    // Buttons, sticks, analog buttons, touch data — all zero (already cleared).
+    // Buttons, sticks, analog buttons, touch data are already zeroed
 
     // MotionData timestamp (offset 68)
     buf[68..76].copy_from_slice(&timestamp_us.to_le_bytes());
