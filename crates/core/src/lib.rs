@@ -1,3 +1,6 @@
+#[cfg(target_os = "windows")]
+compile_error!("This crate does not support Windows.");
+
 use std::sync::Arc;
 use std::sync::atomic;
 use std::time::Duration;
