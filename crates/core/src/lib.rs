@@ -9,6 +9,8 @@ pub(crate) mod frame;
 pub(crate) mod reader;
 pub(crate) mod server;
 
+pub use server::ServerConfig;
+
 use std::sync::Arc;
 use std::sync::atomic;
 use std::time::Duration;
@@ -18,17 +20,6 @@ use crate::reader::Reader;
 
 pub const READ_ATOMIC_BOOL_ORDERING: atomic::Ordering = atomic::Ordering::Relaxed;
 const CONTROLLER_OPEN_RETRY_DELAY_SEC: u64 = 5;
-
-// TODO: Move to server.rs
-#[derive(Debug, Clone)]
-pub struct ServerConfig {
-    /// Address or host to bind to
-    pub bind_addr: String,
-    // Port to listen on
-    pub port: u16,
-    /// Invert the yaxis values on the gyro and accelerometer
-    pub invert_y: bool,
-}
 
 /// Sleep in 100 ms increments while `running`.
 pub(crate) fn sleep_interruptible(running: &atomic::AtomicBool, total: Duration) {
@@ -44,7 +35,7 @@ pub(crate) fn sleep_interruptible(running: &atomic::AtomicBool, total: Duration)
 /// Run the server loop until receiving a signal
 pub fn run_server(
     running: Arc<atomic::AtomicBool>,
-    config: ServerConfig,
+    config: server::ServerConfig,
 ) -> Result<(), ServerError> {
     let mut api = hidapi::HidApi::new()?;
 

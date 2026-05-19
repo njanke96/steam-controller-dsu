@@ -7,13 +7,23 @@ use std::time::{Duration, Instant};
 
 use crate::errors::ServerError;
 use crate::frame::TritonFrame;
-use crate::{READ_ATOMIC_BOOL_ORDERING, ServerConfig, dsu};
+use crate::{READ_ATOMIC_BOOL_ORDERING, dsu};
 
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(5);
 const VERSION_TYPE: u32 = 0x100000;
 const INFO_TYPE: u32 = 0x100001;
 const DATA_TYPE: u32 = 0x100002;
 
+// TODO: Move to server.rs
+#[derive(Debug, Clone)]
+pub struct ServerConfig {
+    /// Address or host to bind to
+    pub bind_addr: String,
+    // Port to listen on
+    pub port: u16,
+    /// Invert the yaxis values on the gyro and accelerometer
+    pub invert_y: bool,
+}
 #[derive(Debug)]
 struct Client {
     addr: SocketAddr,
