@@ -74,11 +74,25 @@ pub fn run_server(
             config.port
         );
 
+        // Start the device reader and cemuhook udp server
+        //
+
         let (reader, rx) = Reader::start(running.clone(), device);
 
-        // TODO: Join the server send loop thread here, consistency with reader?
-        if let Err(e) = server::Server::run(rx, running.clone(), &config) {
-            log::error!("Server error: {e}");
+        let udp_server = server::Server::new(running.clone(), config.clone())?;
+
+        match udp_server.run(rx) {
+            Ok((recv_result, send_result)) => {
+                if let Err(e) = recv_result {
+                    log::error!("UDP receive loop error: {e}");
+                }
+                if let Err(err) = send_result {
+                    log::error!("UDP send thread panicked: {err:?}");
+                }
+            }
+            Err(e) => {
+                log::error!("Failed to clone UDP socket for send thread: {e}");
+            }
         }
 
         if let Err(err) = reader.join() {

@@ -4,6 +4,10 @@ use thiserror::Error;
 pub enum ServerError {
     #[error("could not initialize HID API: {0}")]
     HidApi(#[from] hidapi::HidError),
+    #[error("failed to clone UdpSocket: {0}")]
+    UdpSocketCloneFailed(std::io::Error),
+    #[error("UdpSocket operation error: {0}")]
+    UdpSocketOperationError(std::io::Error),
 }
 
 #[derive(Error, Debug)]

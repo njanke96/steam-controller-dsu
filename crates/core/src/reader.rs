@@ -20,7 +20,8 @@ pub struct Reader {
 
 impl Reader {
     /// Spawn a thread that reads from `device` and sends parsed frames over the returned channel.
-    /// Returns `Self` and a mpsc Receiver
+    /// Returns immediately, use `Reader::join` to join the reader thread.
+    /// Returns `Self` and a mpsc Receiver for the UDP server
     pub fn start(
         running: Arc<atomic::AtomicBool>,
         device: impl device::Device + std::marker::Send + 'static,
