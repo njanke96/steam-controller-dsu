@@ -9,6 +9,7 @@ pub trait Device {
 }
 
 /// Represents a gyro frame with axes orientation and sign same as Triton (Steam Controller 2026)
+/// Accel values in G, Gyro in degrees per second
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GyroFrame {
     pub accel_x: f32,
