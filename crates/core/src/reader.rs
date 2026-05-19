@@ -2,9 +2,8 @@ use std::sync::{Arc, atomic, mpsc};
 use std::thread;
 
 use crate::READ_ATOMIC_BOOL_ORDERING;
-use crate::devices::device;
+use crate::devices::device::{self, GyroFrame};
 use crate::errors::DeviceError;
-use crate::frame::TritonFrame;
 
 /// Number of frozen frames before giving up and exiting (~1 second at 100Hz).
 /// This allows recovery when Steam takes the controller and changes IMU mode.
@@ -13,7 +12,7 @@ const FROZEN_EXIT_THRESHOLD: usize = 100;
 /// At 100Hz this is ~1 second of no data.
 const DISCONNECT_THRESHOLD: usize = 10;
 
-/// Background reader that continuously parses Triton frames from a device
+/// Background reader that continuously parses frames from a device
 pub struct Reader {
     handle: thread::JoinHandle<()>,
 }
@@ -25,8 +24,8 @@ impl Reader {
     pub fn start(
         running: Arc<atomic::AtomicBool>,
         device: impl device::Device + std::marker::Send + 'static,
-    ) -> (Self, mpsc::Receiver<TritonFrame>) {
-        let (tx, rx) = mpsc::channel::<TritonFrame>();
+    ) -> (Self, mpsc::Receiver<GyroFrame>) {
+        let (tx, rx) = mpsc::channel::<GyroFrame>();
 
         let handle = thread::spawn(move || {
             let mut frame_state = FrameState::new();
@@ -57,7 +56,7 @@ impl Reader {
 struct FrameState {
     pub frozen_count: usize,
     pub total_frames: usize,
-    pub prev_frame: Option<TritonFrame>,
+    pub prev_frame: Option<GyroFrame>,
     pub fail_count: usize,
 }
 
@@ -73,32 +72,20 @@ impl FrameState {
 }
 
 /// Read a frame, returning true if another should be read.
-fn read_frame<D>(device: &D, frame_state: &mut FrameState, tx: &mpsc::Sender<TritonFrame>) -> bool
+fn read_frame<D>(device: &D, frame_state: &mut FrameState, tx: &mpsc::Sender<GyroFrame>) -> bool
 where
     D: device::Device + std::marker::Send + 'static,
 {
-    match device.read_triton_frame() {
+    match device.read_frame() {
         Ok(frame) => {
             frame_state.fail_count = 0;
             frame_state.total_frames += 1;
-
-            log::trace!(
-                "seq={} accel=({},{},{}) gyro=({},{},{})",
-                frame.seq_num,
-                frame.accel_x,
-                frame.accel_y,
-                frame.accel_z,
-                frame.gyro_x,
-                frame.gyro_y,
-                frame.gyro_z
-            );
 
             // Check for frozen/stale IMU data
             // This is observed behavior when Steam disables the Gyro
             let is_frozen = frame_state
                 .prev_frame
-                .as_ref()
-                .map(|prev| frame.imu_eq(prev))
+                .map(|prev| frame == prev)
                 .unwrap_or(false);
 
             if is_frozen {
@@ -119,9 +106,11 @@ where
 
             if frame_state.total_frames.is_multiple_of(100) {
                 log::debug!(
-                    "Reader: frame {} sent, seq={}, gyro=({},{},{})",
+                    "Reader: frame {} sent, accel=({:.3},{:.3},{:.3}), gyro=({:.3},{:.3},{:.3})",
                     frame_state.total_frames,
-                    frame.seq_num,
+                    frame.accel_x,
+                    frame.accel_y,
+                    frame.accel_z,
                     frame.gyro_x,
                     frame.gyro_y,
                     frame.gyro_z
@@ -139,8 +128,8 @@ where
             log::trace!("Short read: {} bytes (expected {})", n, expected);
             frame_state.fail_count += 1;
         }
-        Err(DeviceError::NonTritonReport(id)) => {
-            log::trace!("Ignoring non-Triton report (first byte: 0x{:02x})", id);
+        Err(DeviceError::InvalidReport(id)) => {
+            log::trace!("Ignoring invalid report (first byte: 0x{:02x})", id);
             frame_state.fail_count = 0;
         }
         Err(e) => {

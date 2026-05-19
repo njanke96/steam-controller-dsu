@@ -20,6 +20,6 @@ pub enum DeviceError {
     Hid(#[from] hidapi::HidError),
     #[error("Short read: got {0} bytes, expected at least {1}")]
     ShortRead(usize, usize),
-    #[error("Non-Triton report (first byte: 0x{0:02x})")]
-    NonTritonReport(u8),
+    #[error("Invalid report (first byte: 0x{0:02x})")]
+    InvalidReport(u8),
 }

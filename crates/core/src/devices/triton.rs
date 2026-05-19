@@ -3,9 +3,8 @@ use std::fs::OpenOptions;
 use std::os::unix::io::AsRawFd;
 use std::time::Duration;
 
-use crate::devices::device::Device;
+use crate::devices::device::{Device, GyroFrame};
 use crate::errors::DeviceError;
-use crate::frame::TritonFrame;
 
 /// Steam Controller vendor/product IDs.
 pub const VID: u16 = 0x28de;
@@ -34,33 +33,128 @@ pub const IMU_MODE_SEND_RAW_GYRO: u16 = 0x10;
 const FEATURE_REPORT_SLEEP_MILLIS: u64 = 50;
 const READ_TIMOUT_MILLIS: i32 = 100;
 
-pub struct LinuxDevice {
+/// Input report ID for the Triton full-state packet
+pub const REPORT_ID_TRITON_FULL: u8 = 0x42;
+
+/// Total HID report length (including Report ID)
+pub const REPORT_SIZE: usize = 54;
+
+/// Sensor scale factors
+pub const ACCEL_PER_G: f32 = 16384.0;
+pub const GYRO_PER_DPS: f32 = 16.0;
+
+/// Parsed Triton full-state frame
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TritonFrame {
+    pub seq_num: u8,
+    pub buttons: u32,
+    pub trigger_left: i16,
+    pub trigger_right: i16,
+    pub left_stick_x: i16,
+    pub left_stick_y: i16,
+    pub right_stick_x: i16,
+    pub right_stick_y: i16,
+    pub left_pad_x: i16,
+    pub left_pad_y: i16,
+    pub pressure_left: u16,
+    pub right_pad_x: i16,
+    pub right_pad_y: i16,
+    pub pressure_right: u16,
+    pub imu_timestamp: u32,
+    pub accel_x: i16,
+    pub accel_y: i16,
+    pub accel_z: i16,
+    pub gyro_x: i16,
+    pub gyro_y: i16,
+    pub gyro_z: i16,
+    pub quat_w: i16,
+    pub quat_x: i16,
+    pub quat_y: i16,
+    pub quat_z: i16,
+}
+
+impl TritonFrame {
+    pub const REPORT_ID: u8 = REPORT_ID_TRITON_FULL;
+    pub const REPORT_SIZE: usize = REPORT_SIZE;
+
+    /// Parse a raw HID report.  `data` must include the Report ID byte.
+    pub fn parse(data: &[u8]) -> Option<Self> {
+        if data.len() < Self::REPORT_SIZE || data[0] != Self::REPORT_ID {
+            return None;
+        }
+        let p = &data[1..];
+        Some(Self {
+            seq_num: p[0],
+            buttons: u32::from_le_bytes([p[1], p[2], p[3], p[4]]),
+            trigger_left: i16::from_le_bytes([p[5], p[6]]),
+            trigger_right: i16::from_le_bytes([p[7], p[8]]),
+            left_stick_x: i16::from_le_bytes([p[9], p[10]]),
+            left_stick_y: i16::from_le_bytes([p[11], p[12]]),
+            right_stick_x: i16::from_le_bytes([p[13], p[14]]),
+            right_stick_y: i16::from_le_bytes([p[15], p[16]]),
+            left_pad_x: i16::from_le_bytes([p[17], p[18]]),
+            left_pad_y: i16::from_le_bytes([p[19], p[20]]),
+            pressure_left: u16::from_le_bytes([p[21], p[22]]),
+            right_pad_x: i16::from_le_bytes([p[23], p[24]]),
+            right_pad_y: i16::from_le_bytes([p[25], p[26]]),
+            pressure_right: u16::from_le_bytes([p[27], p[28]]),
+            imu_timestamp: u32::from_le_bytes([p[29], p[30], p[31], p[32]]),
+            accel_x: i16::from_le_bytes([p[33], p[34]]),
+            accel_y: i16::from_le_bytes([p[35], p[36]]),
+            accel_z: i16::from_le_bytes([p[37], p[38]]),
+            gyro_x: i16::from_le_bytes([p[39], p[40]]),
+            gyro_y: i16::from_le_bytes([p[41], p[42]]),
+            gyro_z: i16::from_le_bytes([p[43], p[44]]),
+            quat_w: i16::from_le_bytes([p[45], p[46]]),
+            quat_x: i16::from_le_bytes([p[47], p[48]]),
+            quat_y: i16::from_le_bytes([p[49], p[50]]),
+            quat_z: i16::from_le_bytes([p[51], p[52]]),
+        })
+    }
+}
+
+impl From<TritonFrame> for GyroFrame {
+    fn from(value: TritonFrame) -> Self {
+        GyroFrame {
+            accel_x: value.accel_x as f32 / ACCEL_PER_G,
+            accel_y: value.accel_y as f32 / ACCEL_PER_G,
+            accel_z: value.accel_z as f32 / ACCEL_PER_G,
+            gyro_x: value.gyro_x as f32 / GYRO_PER_DPS,
+            gyro_y: value.gyro_y as f32 / GYRO_PER_DPS,
+            gyro_z: value.gyro_z as f32 / GYRO_PER_DPS,
+        }
+    }
+}
+
+/// Triton (Steam Controller 2026) Linux device
+pub struct LinuxTriton {
     hid: HidDevice,
     path: String,
 }
 
-impl LinuxDevice {
-    /// Enable raw accelerometer + gyroscope output.
-    pub fn enable_imu(&self) -> Result<(), DeviceError> {
+impl Device for LinuxTriton {
+    /// Initialize by enabling IMU on the raw file
+    fn initialize(&self) -> Result<(), DeviceError> {
         let raw = OpenOptions::new().read(true).write(true).open(&self.path)?;
         enable_imu_on_file(&raw)?;
         Ok(())
     }
-}
 
-impl Device for LinuxDevice {
-    /// Read a single Triton frame from the controller.
-    fn read_triton_frame(&self) -> Result<TritonFrame, DeviceError> {
+    /// Read a single gyro frame from the controller.
+    fn read_frame(&self) -> Result<GyroFrame, DeviceError> {
         let mut buf = [0u8; 64];
         let n = self.hid.read_timeout(&mut buf, READ_TIMOUT_MILLIS)?;
         if n < TritonFrame::REPORT_SIZE {
             return Err(DeviceError::ShortRead(n, TritonFrame::REPORT_SIZE));
         }
-        TritonFrame::parse(&buf[..n]).ok_or(DeviceError::NonTritonReport(buf[0]))
+
+        let frame = TritonFrame::parse(&buf[..n]).ok_or(DeviceError::InvalidReport(buf[0]))?;
+
+        Ok(frame.into())
     }
 }
 
-impl Drop for LinuxDevice {
+impl Drop for LinuxTriton {
     fn drop(&mut self) {
         // Best-effort cleanup: attempt to return controller to factory defaults
         let Ok(raw) = OpenOptions::new().read(true).write(true).open(&self.path) else {
@@ -95,7 +189,7 @@ fn send_feature_report_via_ioctl(file: &std::fs::File, data: &[u8]) -> Result<()
 }
 
 /// Enumerate all vendor interfaces and return the first one that opens.
-pub fn open_controller(api: &HidApi) -> Result<LinuxDevice, DeviceError> {
+pub fn linux_find_and_open(api: &HidApi) -> Result<LinuxTriton, DeviceError> {
     let candidates: Vec<_> = api
         .device_list()
         .filter(|d| {
@@ -127,7 +221,7 @@ pub fn open_controller(api: &HidApi) -> Result<LinuxDevice, DeviceError> {
         probe[1] = CMD_CLEAR_DIGITAL_MAPPINGS;
         if send_feature_report_via_ioctl(&raw, &probe).is_ok() {
             log::info!("Opened controller on {}", path);
-            return Ok(LinuxDevice {
+            return Ok(LinuxTriton {
                 hid,
                 path: path.to_string(),
             });

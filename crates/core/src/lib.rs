@@ -5,7 +5,6 @@ pub mod errors;
 
 pub(crate) mod devices;
 pub(crate) mod dsu;
-pub(crate) mod frame;
 pub(crate) mod reader;
 pub(crate) mod server;
 
@@ -15,6 +14,7 @@ use std::sync::Arc;
 use std::sync::atomic;
 use std::time::Duration;
 
+use crate::devices::device::Device;
 use crate::errors::{DeviceError, ServerError};
 use crate::reader::Reader;
 
@@ -54,8 +54,8 @@ pub fn run_server(
         };
 
         log::info!("Controller opened. Enabling IMU...");
-        if let Err(e) = device.enable_imu() {
-            log::error!("Failed to enable IMU: {e}");
+        if let Err(e) = device.initialize() {
+            log::error!("Failed to initialize device: {e}");
             sleep_interruptible(&running, Duration::from_secs(3));
             continue;
         }
@@ -104,22 +104,26 @@ pub fn run_server(
 pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceError> {
     let api = hidapi::HidApi::new()?;
 
-    let device = devices::linux_device::open_controller(&api)?;
+    // If more devices are ever supported, add selection logic
+    let device = devices::triton::linux_find_and_open(&api)?;
 
-    log::info!("Controller opened. Enabling IMU...");
-    device.enable_imu()?;
-    log::info!("IMU enabled. Dumping frames...");
+    log::info!("Controller opened. Running initialization...");
+    device.initialize()?;
+    log::info!("Initialized. Dumping frames...");
 
     let (reader, rx) = Reader::start(running.clone(), device);
 
     while running.load(READ_ATOMIC_BOOL_ORDERING) {
         match rx.recv() {
             Ok(frame) => {
-                let (ax, ay, az) = frame.accel_g();
-                let (gx, gy, gz) = frame.gyro_dps();
                 println!(
-                    "seq={:3} | accel=({:7.3},{:7.3},{:7.3}) g | gyro=({:8.1},{:8.1},{:8.1}) dps",
-                    frame.seq_num, ax, ay, az, gx, gy, gz
+                    "accel=({:7.3},{:7.3},{:7.3}) g | gyro=({:8.1},{:8.1},{:8.1}) dps",
+                    frame.accel_x,
+                    frame.accel_y,
+                    frame.accel_z,
+                    frame.gyro_x,
+                    frame.gyro_y,
+                    frame.gyro_z
                 );
             }
             Err(e) => {
@@ -143,15 +147,14 @@ pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceErro
 fn open_controller_with_retry(
     running: Arc<atomic::AtomicBool>,
     api: &hidapi::HidApi,
-) -> Option<devices::linux_device::LinuxDevice> {
-    // TODO: Support multiple devices, return impl `Device`
-
+) -> Option<impl devices::device::Device + use<>> {
     loop {
         if !running.load(READ_ATOMIC_BOOL_ORDERING) {
             return None;
         }
 
-        match devices::linux_device::open_controller(api) {
+        // If more devices are ever supported, add selection logic
+        match devices::triton::linux_find_and_open(api) {
             Ok(d) => return Some(d),
             Err(e) => {
                 log::warn!(

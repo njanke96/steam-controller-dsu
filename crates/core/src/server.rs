@@ -5,8 +5,8 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::devices::device::GyroFrame;
 use crate::errors::ServerError;
-use crate::frame::TritonFrame;
 use crate::{READ_ATOMIC_BOOL_ORDERING, dsu};
 
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -14,7 +14,6 @@ const VERSION_TYPE: u32 = 0x100000;
 const INFO_TYPE: u32 = 0x100001;
 const DATA_TYPE: u32 = 0x100002;
 
-// TODO: Move to server.rs
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
     /// Address or host to bind to
@@ -49,7 +48,7 @@ struct SendThreadContext {
     pub clients: Arc<Mutex<Vec<Client>>>,
     pub config: ServerConfig,
     pub socket: UdpSocket,
-    pub rx: mpsc::Receiver<TritonFrame>,
+    pub rx: mpsc::Receiver<GyroFrame>,
 }
 
 type ThreadResults = (
@@ -88,10 +87,7 @@ impl Server {
     /// Start the CemuHook UDP server and broadcast frames received on `rx` to all subscribed CemuHook clients
     /// Blocks until both the Receving loop (this thread) and Send loop (background thread) complete
     /// Returns both results on Success, Err(ServerError) if the server failed to start
-    pub fn run(
-        &self,
-        rx: mpsc::Receiver<TritonFrame>, // TODO: More agnostic struct for frame data, not device specific
-    ) -> Result<ThreadResults, ServerError> {
+    pub fn run(&self, rx: mpsc::Receiver<GyroFrame>) -> Result<ThreadResults, ServerError> {
         let send_context = SendThreadContext {
             main_thread_running: self.main_thread_running.clone(),
             server_thread_running: self.server_thread_running.clone(),
@@ -244,18 +240,16 @@ impl Server {
                     context.config.invert_y,
                 );
 
-                let (ax, ay, az) = frame.accel_g();
-                let (gx, gy, gz) = frame.gyro_dps();
                 log::trace!(
                     "Packet {} to {}: accel=({:.3}, {:.3}, {:.3}) gyro=({:.1}, {:.1}, {:.1})",
                     client.packet_counter,
                     client.addr,
-                    ax,
-                    ay,
-                    az,
-                    gx,
-                    gy,
-                    gz
+                    frame.accel_x,
+                    frame.accel_y,
+                    frame.accel_z,
+                    frame.gyro_x,
+                    frame.gyro_y,
+                    frame.gyro_z
                 );
 
                 if let Err(e) = context.socket.send_to(&packet_buf, client.addr) {
