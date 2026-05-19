@@ -21,7 +21,7 @@ pub struct ServerConfig {
     // Port to listen on
     pub port: u16,
     /// Invert the yaxis values on the gyro and accelerometer
-    pub invert_y: bool,
+    pub invert_pitch: bool,
 }
 #[derive(Debug)]
 struct Client {
@@ -237,7 +237,7 @@ impl Server {
                     client.id,
                     client.slot,
                     timestamp_us,
-                    context.config.invert_y,
+                    context.config.invert_pitch,
                 );
 
                 log::trace!(

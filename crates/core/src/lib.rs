@@ -53,14 +53,14 @@ pub fn run_server(
             return Ok(());
         };
 
-        log::info!("Controller opened. Enabling IMU...");
+        log::info!("Controller opened. Initializing...");
         if let Err(e) = device.initialize() {
             log::error!("Failed to initialize device: {e}");
             sleep_interruptible(&running, Duration::from_secs(3));
             continue;
         }
         log::info!(
-            "IMU enabled. Starting CemuHook server on {}:{} ...",
+            "Device initialized. Starting CemuHook server on {}:{} ...",
             config.bind_addr,
             config.port
         );

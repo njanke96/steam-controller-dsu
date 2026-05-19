@@ -15,7 +15,7 @@ Options:
       --debug                  Run in debug mode: open the controller and dump raw IMU frames
       --bind-addr <BIND_ADDR>  UDP bind address for the CemuHook server [default: 0.0.0.0]
       --port <PORT>            UDP port for the CemuHook server [default: 26760]
-      --invert-y               Invert the pitch axis
+      --invert-pitch           Invert the pitch axis
   -h, --help                   Print help
 ```
 

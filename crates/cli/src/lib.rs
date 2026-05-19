@@ -18,7 +18,7 @@ pub struct Args {
 
     /// Invert the pitch axis
     #[arg(long, default_value_t = false)]
-    pub invert_y: bool,
+    pub invert_pitch: bool,
 }
 
 /// The CLI entrypoint to be called from the root crate's `[[bin]]`
@@ -51,7 +51,7 @@ pub fn entrypoint() -> i32 {
     let config = scdsu_core::ServerConfig {
         bind_addr: args.bind_addr,
         port: args.port,
-        invert_y: args.invert_y,
+        invert_pitch: args.invert_pitch,
     };
 
     log::debug!("Server configuration from cli args: {config:?}");

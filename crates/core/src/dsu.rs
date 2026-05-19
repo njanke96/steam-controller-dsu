@@ -65,7 +65,7 @@ pub fn write_data_event(
     client_id: u32,
     slot: u8,
     timestamp_us: u64,
-    invert_y: bool,
+    invert_pitch: bool,
 ) {
     buf.fill(0);
 
@@ -93,29 +93,35 @@ pub fn write_data_event(
     // MotionData timestamp (offset 68)
     buf[68..76].copy_from_slice(&timestamp_us.to_le_bytes());
 
-    // Accelerometer in g (offset 76).
-    // Steam Controller IMU orientation matches CemuHook expectations.
-    // With invert_y: accY is not negated (non-natural style).
-    buf[76..80].copy_from_slice(&(-frame.accel_x).to_le_bytes());
-    let acc_y = if invert_y {
+    // Accelerometer in g (offset 76)
+    let acc_x = frame.accel_x;
+    let acc_y = if invert_pitch {
         frame.accel_y
     } else {
         -frame.accel_y
     };
-    buf[80..84].copy_from_slice(&acc_y.to_le_bytes());
-    buf[84..88].copy_from_slice(&frame.accel_z.to_le_bytes());
+    let acc_z = frame.accel_z;
 
-    // Gyroscope in deg/s (offset 88).
-    // Steam Controller mapping: yaw = -gyroY, roll = gyroZ
-    // Pitch: -gx (natural style) or gx (invert_y).
-    let pitch = if invert_y {
+    buf[76..80].copy_from_slice(&acc_x.to_le_bytes());
+    buf[80..84].copy_from_slice(&acc_y.to_le_bytes());
+    buf[84..88].copy_from_slice(&acc_z.to_le_bytes());
+
+    // Gyroscope in deg/s (offset 88)
+    let pitch = if invert_pitch {
         frame.gyro_x
     } else {
         -frame.gyro_x
     };
+    let yaw = if invert_pitch {
+        frame.gyro_y
+    } else {
+        -frame.gyro_y
+    };
+
+    let roll = frame.gyro_z;
     buf[88..92].copy_from_slice(&pitch.to_le_bytes());
-    buf[92..96].copy_from_slice(&(-frame.gyro_y).to_le_bytes());
-    buf[96..100].copy_from_slice(&frame.gyro_z.to_le_bytes());
+    buf[92..96].copy_from_slice(&yaw.to_le_bytes());
+    buf[96..100].copy_from_slice(&roll.to_le_bytes());
 
     let c = crc32(&buf[..100]);
     buf[8..12].copy_from_slice(&c.to_le_bytes());
