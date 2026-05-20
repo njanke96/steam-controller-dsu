@@ -1,3 +1,5 @@
+//! Error types for the library.
+
 use thiserror::Error;
 
 /// Errors that can occur when running the UDP server.

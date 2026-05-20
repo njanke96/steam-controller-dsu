@@ -179,13 +179,13 @@ impl From<TritonFrame> for DSUFrame {
     }
 }
 
-/// Triton (Steam Controller 2026) Linux device
-pub struct LinuxTriton {
+/// Triton (Steam Controller 2026) device
+pub struct Triton {
     hid: HidDevice,
     path: String,
 }
 
-impl Device for LinuxTriton {
+impl Device for Triton {
     /// Initialize by enabling IMU on the raw file.
     fn initialize(&self) -> Result<(), DeviceError> {
         let raw = OpenOptions::new().read(true).write(true).open(&self.path)?;
@@ -207,7 +207,7 @@ impl Device for LinuxTriton {
     }
 }
 
-impl Drop for LinuxTriton {
+impl Drop for Triton {
     fn drop(&mut self) {
         // Best-effort cleanup: attempt to return controller to factory defaults
         let Ok(raw) = OpenOptions::new().read(true).write(true).open(&self.path) else {
@@ -243,7 +243,8 @@ fn send_feature_report_via_ioctl(file: &std::fs::File, data: &[u8]) -> Result<()
 
 /// Enumerate all vendor interfaces and return the first Triton that responds to a
 /// `CMD_CLEAR_DIGITAL_MAPPINGS` probe without error. Requires an [`HidApi`](hidapi::HidApi)
-pub fn linux_find_and_open(api: &HidApi) -> Result<LinuxTriton, DeviceError> {
+/// to be passed to the first parameter.
+pub fn find(api: &HidApi) -> Result<Triton, DeviceError> {
     let candidates: Vec<_> = api
         .device_list()
         .filter(|d| {
@@ -275,7 +276,7 @@ pub fn linux_find_and_open(api: &HidApi) -> Result<LinuxTriton, DeviceError> {
         probe[1] = CMD_CLEAR_DIGITAL_MAPPINGS;
         if send_feature_report_via_ioctl(&raw, &probe).is_ok() {
             log::info!("Opened controller on {}", path);
-            return Ok(LinuxTriton {
+            return Ok(Triton {
                 hid,
                 path: path.to_string(),
             });

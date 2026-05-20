@@ -1,11 +1,11 @@
-//! This module provides a Reader for reading [`DSUFrame`](crate::dsu::DSUFrame) data from devices.
+//! Provides a background reader for reading [`DSUFrame`](crate::dsu::DSUFrame) data from devices.
 
 use std::sync::{Arc, atomic, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::READ_ATOMIC_BOOL_ORDERING;
-use crate::devices::device;
+use crate::devices::Device;
 use crate::dsu::DSUFrame;
 use crate::errors::DeviceError;
 
@@ -18,45 +18,33 @@ const REINIT_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 /// At 100Hz this is ~1 second of no data.
 const DISCONNECT_THRESHOLD: usize = 100;
 
-/// Background reader that continuously parses frames from a device
-pub struct Reader {
-    handle: thread::JoinHandle<()>,
-}
+/// Spawn a thread that reads from `device` and sends parsed frames over the returned channel.
+///
+/// Returns a [`JoinHandle`](std::thread::JoinHandle) and a mpsc Receiver for receiving frame data.
+pub fn spawn_reader(
+    running: Arc<atomic::AtomicBool>,
+    device: impl Device + std::marker::Send + 'static,
+) -> (std::thread::JoinHandle<()>, mpsc::Receiver<DSUFrame>) {
+    let (tx, rx) = mpsc::channel::<DSUFrame>();
 
-impl Reader {
-    /// Spawn a thread that reads from `device` and sends parsed frames over the returned channel.
-    /// Returns immediately, use `Reader::join` to join the reader thread.
-    /// Returns `Self` and a mpsc Receiver for the UDP server
-    pub fn start(
-        running: Arc<atomic::AtomicBool>,
-        device: impl device::Device + std::marker::Send + 'static,
-    ) -> (Self, mpsc::Receiver<DSUFrame>) {
-        let (tx, rx) = mpsc::channel::<DSUFrame>();
+    let handle = thread::spawn(move || {
+        let mut frame_state = FrameState::new();
 
-        let handle = thread::spawn(move || {
-            let mut frame_state = FrameState::new();
+        log::debug!("Reader thread started");
 
-            log::debug!("Reader thread started");
-
-            while running.load(READ_ATOMIC_BOOL_ORDERING) {
-                if !read_frame(&device, &mut frame_state, &tx) {
-                    break;
-                }
+        while running.load(READ_ATOMIC_BOOL_ORDERING) {
+            if !read_frame(&device, &mut frame_state, &tx) {
+                break;
             }
+        }
 
-            log::debug!(
-                "Reader thread finished after {} frames",
-                frame_state.total_frames
-            );
-        });
+        log::debug!(
+            "Reader thread finished after {} frames",
+            frame_state.total_frames
+        );
+    });
 
-        (Self { handle }, rx)
-    }
-
-    /// Join the reader's thread, consuming `self`.
-    pub fn join(self) -> Result<(), Box<dyn std::any::Any + Send>> {
-        self.handle.join()
-    }
+    (handle, rx)
 }
 
 struct FrameState {
@@ -82,7 +70,7 @@ impl FrameState {
 /// Read a frame, returning true if another should be read.
 fn read_frame<D>(device: &D, frame_state: &mut FrameState, tx: &mpsc::Sender<DSUFrame>) -> bool
 where
-    D: device::Device + std::marker::Send + 'static,
+    D: Device + std::marker::Send + 'static,
 {
     match device.read_frame() {
         Ok(frame) => {

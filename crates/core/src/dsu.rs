@@ -1,3 +1,5 @@
+//! Provides functionality for working with DSU protocol data.
+
 /// DSU frame representing all controller data sent over the CemuHook protocol.
 /// DSU protocol reference can be found [`here`](https://v1993.github.io/cemuhook-protocol/).
 #[derive(Debug, Clone, Copy, PartialEq)]

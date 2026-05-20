@@ -1,7 +1,7 @@
-//! Core library for [`steam-controller-dsu`].
+//! Core library for `steam-controller-dsu`.
 //!
-//! This crate provides functions to run a CemuHook (DSU) server which supplies controller input
-//! state over a UDP connection to emulators.
+//! This library crate provides the ability to run CemuHook (DSU) server which supplies controller
+//! input state over a UDP connection to various video game console emulators.
 
 #[cfg(target_os = "windows")]
 compile_error!("This crate does not support Windows.");
@@ -18,14 +18,13 @@ use std::sync::Arc;
 use std::sync::atomic;
 use std::time::Duration;
 
-use crate::devices::device::Device;
+use crate::devices::Device;
 use crate::errors::{DeviceError, ServerError};
-use crate::reader::Reader;
 
 pub(crate) const READ_ATOMIC_BOOL_ORDERING: atomic::Ordering = atomic::Ordering::Relaxed;
 const CONTROLLER_OPEN_RETRY_DELAY_SEC: u64 = 5;
 
-/// Run the server loop until receiving a signal.
+/// Run the server loop until `running` is `false`.
 ///
 /// Accepts an [`AtomicBool`](std::sync::atomic::AtomicBool) within an `Arc<>` for signaling when
 /// the server should shut down (set to `false`).
@@ -64,25 +63,25 @@ pub fn run_server(
         // Start the device reader and cemuhook udp server
         //
 
-        let (reader, rx) = Reader::start(running.clone(), device);
+        let (reader_handle, rx) = reader::spawn_reader(running.clone(), device);
 
         let udp_server = server::Server::new(running.clone(), config.clone())?;
 
         match udp_server.run(rx) {
             Ok((recv_result, send_result)) => {
                 if let Err(e) = recv_result {
-                    log::error!("UDP receive loop error: {e}");
+                    log::error!("UDP server receive loop error: {e}");
                 }
                 if let Err(err) = send_result {
-                    log::error!("UDP send thread panicked: {err:?}");
+                    log::error!("UDP server send thread panicked: {err:?}");
                 }
             }
             Err(e) => {
-                log::error!("Failed to clone UDP socket for send thread: {e}");
+                log::error!("Failed to start the UDP server: {e}");
             }
         }
 
-        if let Err(err) = reader.join() {
+        if let Err(err) = reader_handle.join() {
             log::error!("Reader thread panicked: {err:?}");
         }
 
@@ -95,7 +94,8 @@ pub fn run_server(
     }
 }
 
-/// Runs a debug loop, dumping DSU-compatible frames to stdout for debugging purposes.
+/// Runs a debug loop, dumping DSU-compatible frames to stdout for debugging purposes. Like
+/// [`run_server`], it runs until `running` is false.
 ///
 /// Accepts an [`AtomicBool`](std::sync::atomic::AtomicBool) within an `Arc<>` for signaling when
 /// the server should shut down.
@@ -103,13 +103,13 @@ pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceErro
     let api = hidapi::HidApi::new()?;
 
     // If more devices are ever supported, add selection logic
-    let device = devices::triton::linux_find_and_open(&api)?;
+    let device = devices::triton::find(&api)?;
 
     log::info!("Controller opened. Running initialization...");
     device.initialize()?;
     log::info!("Initialized. Dumping frames...");
 
-    let (reader, rx) = Reader::start(running.clone(), device);
+    let (reader_handle, rx) = reader::spawn_reader(running.clone(), device);
 
     while running.load(READ_ATOMIC_BOOL_ORDERING) {
         match rx.recv() {
@@ -186,7 +186,7 @@ pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceErro
     }
 
     drop(rx);
-    if let Err(err) = reader.join() {
+    if let Err(err) = reader_handle.join() {
         log::error!("Reader thread panicked: {err:?}");
     }
 
@@ -199,14 +199,14 @@ pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceErro
 fn open_controller_with_retry(
     running: Arc<atomic::AtomicBool>,
     api: &hidapi::HidApi,
-) -> Option<impl devices::device::Device + use<>> {
+) -> Option<impl devices::Device + use<>> {
     loop {
         if !running.load(READ_ATOMIC_BOOL_ORDERING) {
             return None;
         }
 
         // If more devices are ever supported, add selection logic
-        match devices::triton::linux_find_and_open(api) {
+        match devices::triton::find(api) {
             Ok(d) => return Some(d),
             Err(e) => {
                 log::warn!(
