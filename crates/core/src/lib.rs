@@ -1,17 +1,16 @@
 //! Core library for [`steam-controller-dsu`].
 //!
-//! This crate is not intended to be used outside of the project. It could be, but it is not
-//! sufficiently documented.
+//! This crate provides functions to run a CemuHook (DSU) server which supplies controller input
+//! state over a UDP connection to emulators.
 
 #[cfg(target_os = "windows")]
 compile_error!("This crate does not support Windows.");
 
+pub mod devices;
+pub mod dsu;
 pub mod errors;
-
-pub(crate) mod devices;
-pub(crate) mod dsu;
-pub(crate) mod reader;
-pub(crate) mod server;
+pub mod reader;
+pub mod server;
 
 pub use server::ServerConfig;
 
@@ -23,21 +22,13 @@ use crate::devices::device::Device;
 use crate::errors::{DeviceError, ServerError};
 use crate::reader::Reader;
 
-pub const READ_ATOMIC_BOOL_ORDERING: atomic::Ordering = atomic::Ordering::Relaxed;
+pub(crate) const READ_ATOMIC_BOOL_ORDERING: atomic::Ordering = atomic::Ordering::Relaxed;
 const CONTROLLER_OPEN_RETRY_DELAY_SEC: u64 = 5;
 
-/// Sleep in 100 ms increments while `running`.
-pub(crate) fn sleep_interruptible(running: &atomic::AtomicBool, total: Duration) {
-    let start = std::time::Instant::now();
-    while start.elapsed() < total {
-        if !running.load(READ_ATOMIC_BOOL_ORDERING) {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(100).min(total - start.elapsed()));
-    }
-}
-
-/// Run the server loop until receiving a signal
+/// Run the server loop until receiving a signal.
+///
+/// Accepts an [`AtomicBool`](std::sync::atomic::AtomicBool) within an `Arc<>` for signaling when
+/// the server should shut down (set to `false`).
 pub fn run_server(
     running: Arc<atomic::AtomicBool>,
     config: server::ServerConfig,
@@ -104,8 +95,10 @@ pub fn run_server(
     }
 }
 
-/// Run the debug loop.
-/// Attempts to open the controller and dump frames.
+/// Runs a debug loop, dumping DSU-compatible frames to stdout for debugging purposes.
+///
+/// Accepts an [`AtomicBool`](std::sync::atomic::AtomicBool) within an `Arc<>` for signaling when
+/// the server should shut down.
 pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceError> {
     let api = hidapi::HidApi::new()?;
 
@@ -226,5 +219,16 @@ fn open_controller_with_retry(
                 );
             }
         }
+    }
+}
+
+/// Sleep in 100 ms increments while `running`.
+pub(crate) fn sleep_interruptible(running: &atomic::AtomicBool, total: Duration) {
+    let start = std::time::Instant::now();
+    while start.elapsed() < total {
+        if !running.load(READ_ATOMIC_BOOL_ORDERING) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(100).min(total - start.elapsed()));
     }
 }

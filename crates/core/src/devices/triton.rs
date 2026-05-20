@@ -1,3 +1,5 @@
+//! Adapter for the 2026 Steam Controller (Triton)
+
 use hidapi::{HidApi, HidDevice};
 use std::fs::OpenOptions;
 use std::os::unix::io::AsRawFd;
@@ -11,66 +13,66 @@ use crate::dsu::DSUFrame;
 use crate::errors::DeviceError;
 
 /// Steam Controller vendor/product IDs.
-pub const VID: u16 = 0x28de;
-pub const PID: u16 = 0x1304;
+const VID: u16 = 0x28de;
+const PID: u16 = 0x1304;
 
 /// HID usage page for the vendor-defined gamepad interface.
-pub const USAGE_PAGE_VENDOR: u16 = 0xFF00;
+const USAGE_PAGE_VENDOR: u16 = 0xFF00;
 
 /// Feature report command IDs (shared with Steam Deck / old controller).
-pub const CMD_CLEAR_DIGITAL_MAPPINGS: u8 = 0x81;
-pub const CMD_LOAD_DEFAULT_SETTINGS: u8 = 0x8E;
-pub const CMD_SET_SETTINGS_VALUES: u8 = 0x87;
+const CMD_CLEAR_DIGITAL_MAPPINGS: u8 = 0x81;
+const CMD_LOAD_DEFAULT_SETTINGS: u8 = 0x8E;
+const CMD_SET_SETTINGS_VALUES: u8 = 0x87;
 
 /// Setting register IDs.
-pub const SETTING_LEFT_TRACKPAD_MODE: u8 = 0x07;
-pub const SETTING_RIGHT_TRACKPAD_MODE: u8 = 0x08;
-pub const SETTING_IMU_MODE: u8 = 0x30;
+const SETTING_LEFT_TRACKPAD_MODE: u8 = 0x07;
+const SETTING_RIGHT_TRACKPAD_MODE: u8 = 0x08;
+const SETTING_IMU_MODE: u8 = 0x30;
 
 /// Trackpad mode values.
-pub const MODE_NONE: u16 = 0x07;
+const MODE_NONE: u16 = 0x07;
 
 /// IMU mode bitflags.
-pub const IMU_MODE_SEND_RAW_ACCEL: u16 = 0x08;
-pub const IMU_MODE_SEND_RAW_GYRO: u16 = 0x10;
+const IMU_MODE_SEND_RAW_ACCEL: u16 = 0x08;
+const IMU_MODE_SEND_RAW_GYRO: u16 = 0x10;
 
 const FEATURE_REPORT_SLEEP_MILLIS: u64 = 50;
 const READ_TIMOUT_MILLIS: i32 = 100;
 
 /// Input report ID for the Triton full-state packet
-pub const REPORT_ID_TRITON_FULL: u8 = 0x42;
+const REPORT_ID_TRITON_FULL: u8 = 0x42;
 
 /// Total HID report length (including Report ID)
-pub const REPORT_SIZE: usize = 54;
+const REPORT_SIZE: usize = 54;
 
 /// Sensor scale factors
-pub const ACCEL_PER_G: f32 = 16384.0;
-pub const GYRO_PER_DPS: f32 = 16.384;
+const ACCEL_PER_G: f32 = 16384.0;
+const GYRO_PER_DPS: f32 = 16.384;
 
 const ANALOG_TRIGGER_TO_DIGITAL_THRESHOLD: u8 = 228; // ~90%
 
-pub const MASK_A: u32 = 0x0000_0001;
-pub const MASK_B: u32 = 0x0000_0002;
-pub const MASK_X: u32 = 0x0000_0004;
-pub const MASK_Y: u32 = 0x0000_0008;
-pub const MASK_QAM: u32 = 0x0000_0010;
-pub const MASK_R3: u32 = 0x0000_0020;
-pub const MASK_VIEW: u32 = 0x0000_0040;
-// pub const MASK_R4: u32 = 0x0000_0080;
-// pub const MASK_R5: u32 = 0x0000_0100;
-pub const MASK_R: u32 = 0x0000_0200;
-pub const MASK_DPAD_DOWN: u32 = 0x0000_0400;
-pub const MASK_DPAD_RIGHT: u32 = 0x0000_0800;
-pub const MASK_DPAD_LEFT: u32 = 0x0000_1000;
-pub const MASK_DPAD_UP: u32 = 0x0000_2000;
-pub const MASK_MENU: u32 = 0x0000_4000;
-pub const MASK_L3: u32 = 0x0000_8000;
-pub const MASK_STEAM: u32 = 0x0001_0000;
-// pub const MASK_L4: u32 = 0x0002_0000;
-// pub const MASK_L5: u32 = 0x0004_0000;
-pub const MASK_L: u32 = 0x0008_0000;
+const MASK_A: u32 = 0x0000_0001;
+const MASK_B: u32 = 0x0000_0002;
+const MASK_X: u32 = 0x0000_0004;
+const MASK_Y: u32 = 0x0000_0008;
+const MASK_QAM: u32 = 0x0000_0010;
+const MASK_R3: u32 = 0x0000_0020;
+const MASK_VIEW: u32 = 0x0000_0040;
+// const MASK_R4: u32 = 0x0000_0080;
+// const MASK_R5: u32 = 0x0000_0100;
+const MASK_R: u32 = 0x0000_0200;
+const MASK_DPAD_DOWN: u32 = 0x0000_0400;
+const MASK_DPAD_RIGHT: u32 = 0x0000_0800;
+const MASK_DPAD_LEFT: u32 = 0x0000_1000;
+const MASK_DPAD_UP: u32 = 0x0000_2000;
+const MASK_MENU: u32 = 0x0000_4000;
+const MASK_L3: u32 = 0x0000_8000;
+const MASK_STEAM: u32 = 0x0001_0000;
+// const MASK_L4: u32 = 0x0002_0000;
+// const MASK_L5: u32 = 0x0004_0000;
+const MASK_L: u32 = 0x0008_0000;
 
-/// Parsed Triton full-state frame
+/// Parsed Triton frame.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TritonFrame {
     pub seq_num: u8,
@@ -101,12 +103,9 @@ pub struct TritonFrame {
 }
 
 impl TritonFrame {
-    pub const REPORT_ID: u8 = REPORT_ID_TRITON_FULL;
-    pub const REPORT_SIZE: usize = REPORT_SIZE;
-
-    /// Parse a raw HID report.  `data` must include the Report ID byte.
+    /// Parse a raw HID report. `data` must include the Report ID byte.
     pub fn parse(data: &[u8]) -> Option<Self> {
-        if data.len() < Self::REPORT_SIZE || data[0] != Self::REPORT_ID {
+        if data.len() < REPORT_SIZE || data[0] != REPORT_ID_TRITON_FULL {
             return None;
         }
         let p = &data[1..];
@@ -187,7 +186,7 @@ pub struct LinuxTriton {
 }
 
 impl Device for LinuxTriton {
-    /// Initialize by enabling IMU on the raw file
+    /// Initialize by enabling IMU on the raw file.
     fn initialize(&self) -> Result<(), DeviceError> {
         let raw = OpenOptions::new().read(true).write(true).open(&self.path)?;
         enable_imu_on_file(&raw)?;
@@ -198,8 +197,8 @@ impl Device for LinuxTriton {
     fn read_frame(&self) -> Result<DSUFrame, DeviceError> {
         let mut buf = [0u8; 64];
         let n = self.hid.read_timeout(&mut buf, READ_TIMOUT_MILLIS)?;
-        if n < TritonFrame::REPORT_SIZE {
-            return Err(DeviceError::ShortRead(n, TritonFrame::REPORT_SIZE));
+        if n < REPORT_SIZE {
+            return Err(DeviceError::ShortRead(n, REPORT_SIZE));
         }
 
         let frame = TritonFrame::parse(&buf[..n]).ok_or(DeviceError::InvalidReport(buf[0]))?;
@@ -242,7 +241,8 @@ fn send_feature_report_via_ioctl(file: &std::fs::File, data: &[u8]) -> Result<()
     }
 }
 
-/// Enumerate all vendor interfaces and return the first one that opens.
+/// Enumerate all vendor interfaces and return the first Triton that responds to a
+/// `CMD_CLEAR_DIGITAL_MAPPINGS` probe without error. Requires an [`HidApi`](hidapi::HidApi)
 pub fn linux_find_and_open(api: &HidApi) -> Result<LinuxTriton, DeviceError> {
     let candidates: Vec<_> = api
         .device_list()

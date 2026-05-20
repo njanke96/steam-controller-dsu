@@ -1,3 +1,5 @@
+//! This module provides the CemuHook (DSU) UDP server implementation
+
 use std::io;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic;
@@ -25,6 +27,7 @@ pub struct ServerConfig {
     /// CemuHook controller slot to report on (0-3)
     pub slot: u8,
 }
+
 #[derive(Debug)]
 struct Client {
     addr: SocketAddr,
@@ -36,8 +39,8 @@ struct Client {
 
 /// CemuHook UDP Server
 pub struct Server {
-    main_thread_running: Arc<atomic::AtomicBool>,
-    server_thread_running: Arc<atomic::AtomicBool>,
+    main_thread_run: Arc<atomic::AtomicBool>,
+    server_thread_run: Arc<atomic::AtomicBool>,
     clients: Arc<Mutex<Vec<Client>>>,
     config: ServerConfig,
     socket: UdpSocket,
@@ -45,8 +48,8 @@ pub struct Server {
 
 /// CemuHook UDP Server Send thread context
 struct SendThreadContext {
-    pub main_thread_running: Arc<atomic::AtomicBool>,
-    pub server_thread_running: Arc<atomic::AtomicBool>,
+    pub main_thread_run: Arc<atomic::AtomicBool>,
+    pub server_thread_run: Arc<atomic::AtomicBool>,
     pub clients: Arc<Mutex<Vec<Client>>>,
     pub config: ServerConfig,
     pub socket: UdpSocket,
@@ -59,9 +62,12 @@ type ThreadResults = (
 );
 
 impl Server {
-    /// Attempt to create a new `Server`
+    /// Attempt to create a new `Server`.
+    ///
+    /// The first argument is an [`AtomicBool`](std::sync::atomic::AtomicBool) within an `Arc<>`
+    /// that, when `false`, signals that the server should be shut down.
     pub fn new(
-        main_thread_running: Arc<atomic::AtomicBool>,
+        main_thread_run: Arc<atomic::AtomicBool>,
         config: ServerConfig,
     ) -> Result<Self, ServerError> {
         let addr = format!("{}:{}", config.bind_addr, config.port);
@@ -75,11 +81,11 @@ impl Server {
         log::info!("CemuHook server listening on {}", addr);
 
         let clients: Arc<Mutex<Vec<Client>>> = Arc::new(Mutex::new(Vec::new()));
-        let server_thread_running = Arc::new(atomic::AtomicBool::new(true));
+        let server_thread_run = Arc::new(atomic::AtomicBool::new(true));
 
         Ok(Self {
-            main_thread_running,
-            server_thread_running,
+            main_thread_run,
+            server_thread_run,
             clients,
             config,
             socket,
@@ -91,8 +97,8 @@ impl Server {
     /// Returns both results on Success, Err(ServerError) if the server failed to start
     pub fn run(&self, rx: mpsc::Receiver<DSUFrame>) -> Result<ThreadResults, ServerError> {
         let send_context = SendThreadContext {
-            main_thread_running: self.main_thread_running.clone(),
-            server_thread_running: self.server_thread_running.clone(),
+            main_thread_run: self.main_thread_run.clone(),
+            server_thread_run: self.server_thread_run.clone(),
             clients: self.clients.clone(),
             config: self.config.clone(),
             socket: self
@@ -116,8 +122,8 @@ impl Server {
     fn recv_loop(&self) -> io::Result<()> {
         let mut buf = [0u8; 256];
 
-        while self.main_thread_running.load(READ_ATOMIC_BOOL_ORDERING)
-            && self.server_thread_running.load(READ_ATOMIC_BOOL_ORDERING)
+        while self.main_thread_run.load(READ_ATOMIC_BOOL_ORDERING)
+            && self.server_thread_run.load(READ_ATOMIC_BOOL_ORDERING)
         {
             match self.socket.recv_from(&mut buf) {
                 Ok((msg_len, addr)) => {
@@ -208,10 +214,8 @@ impl Server {
         let mut timestamp_us: u64 = 0;
 
         loop {
-            if !context.main_thread_running.load(READ_ATOMIC_BOOL_ORDERING)
-                || !context
-                    .server_thread_running
-                    .load(READ_ATOMIC_BOOL_ORDERING)
+            if !context.main_thread_run.load(READ_ATOMIC_BOOL_ORDERING)
+                || !context.server_thread_run.load(READ_ATOMIC_BOOL_ORDERING)
             {
                 break;
             }
@@ -221,7 +225,7 @@ impl Server {
                 Err(_) => {
                     log::debug!("Frame channel closed, send loop exiting");
                     context
-                        .server_thread_running
+                        .server_thread_run
                         .store(false, atomic::Ordering::SeqCst);
                     break;
                 }

@@ -1,4 +1,5 @@
 /// DSU frame representing all controller data sent over the CemuHook protocol.
+/// DSU protocol reference can be found [`here`](https://v1993.github.io/cemuhook-protocol/).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DSUFrame {
     pub dpad_left: bool,
@@ -48,7 +49,7 @@ fn write_header(buf: &mut [u8], payload_len: u16, client_id: u32) {
 
 /// CRC32 used by the CemuHook protocol.
 /// Matches the algorithm from SteamDeckGyroDSU.
-pub fn crc32(data: &[u8]) -> u32 {
+fn crc32(data: &[u8]) -> u32 {
     let mut crc: u32 = 0xFFFFFFFF;
     for &byte in data {
         crc ^= byte as u32;

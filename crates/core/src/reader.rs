@@ -1,3 +1,5 @@
+//! This module provides a Reader for reading [`DSUFrame`](crate::dsu::DSUFrame) data from devices.
+
 use std::sync::{Arc, atomic, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -51,7 +53,7 @@ impl Reader {
         (Self { handle }, rx)
     }
 
-    /// Join the reader's thread
+    /// Join the reader's thread, consuming `self`.
     pub fn join(self) -> Result<(), Box<dyn std::any::Any + Send>> {
         self.handle.join()
     }
