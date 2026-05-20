@@ -14,7 +14,21 @@ This is a DSU (CemuHook) UDP server, currently supporting the Gyro data of the 2
 
 ## Install
 
-I plan to publish to crates.io eventually.
+### Cargo
+
+1. Ensure you have development files for `libudev` (`libudev-dev` on Debian, `systemd-devel` on Fedora, `systemd` on Arch, `eudev-libudev-devel` on Void)
+2. `cargo install steam-controller-dsu`
+
+### Manual
+
+1. Ensure you have `libudev` (present on systemd distros)
+2. Download the latest release binary, make sure it's executable, and stick it somewhere in `$PATH`.
+
+### From source
+
+1. Download the latest stable versions of Rust and Cargo
+2. Ensure you have development files for `libudev` (`libudev-dev` on Debian, `systemd-devel` on Fedora, `systemd` on Arch, `eudev-libudev-devel` on Void)
+3. Clone and build with `cargo build --release`
 
 ## Usage
 
@@ -29,12 +43,6 @@ Options:
       --slot <SLOT>            CemuHook controller slot to report on (0-3 for Controllers 1 through 4). [default: 0]
   -h, --help                   Print help
 ```
-
-## Building from source
-
-1. Download the latest stable versions of Rust and Cargo
-2. Ensure you have development files for `libudev` (`libudev-dev` on Debian, `systemd-devel` on Fedora, `systemd` on Arch, `eudev-libudev-devel` on Void)
-3. Clone and build with `cargo build --release`
 
 ## Wishlist
 
