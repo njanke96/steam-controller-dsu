@@ -116,8 +116,62 @@ pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceErro
     while running.load(READ_ATOMIC_BOOL_ORDERING) {
         match rx.recv() {
             Ok(frame) => {
+                let buttons_pressed: Vec<&str> = [
+                    ("A", frame.a),
+                    ("B", frame.b),
+                    ("X", frame.x),
+                    ("Y", frame.y),
+                    ("L1", frame.l1),
+                    ("R1", frame.r1),
+                    ("L2", frame.l2),
+                    ("R2", frame.r2),
+                    ("L3", frame.l3),
+                    ("R3", frame.r3),
+                    ("Options", frame.options),
+                    ("Share", frame.share),
+                    ("Home", frame.home),
+                    ("QAM", frame.touch),
+                ]
+                .iter()
+                .filter(|(_, p)| *p)
+                .map(|(n, _)| *n)
+                .collect();
+
+                let dpad_pressed: Vec<&str> = [
+                    ("Up", frame.dpad_up),
+                    ("Down", frame.dpad_down),
+                    ("Left", frame.dpad_left),
+                    ("Right", frame.dpad_right),
+                ]
+                .iter()
+                .filter(|(_, p)| *p)
+                .map(|(n, _)| *n)
+                .collect();
+
+                let buttons_str = if buttons_pressed.is_empty() {
+                    "none".to_string()
+                } else {
+                    buttons_pressed.join(" ")
+                };
+                let dpad_str = if dpad_pressed.is_empty() {
+                    "none".to_string()
+                } else {
+                    dpad_pressed.join(" ")
+                };
+
                 println!(
-                    "accel=({:7.3},{:7.3},{:7.3}) g | gyro=({:8.1},{:8.1},{:8.1}) dps",
+                    "Buttons: {buttons_str}\n\
+                     DPad:    {dpad_str}\n\
+                     Sticks:  L({:4},{:4})  R({:4},{:4})\n\
+                     Triggers: L2={:3}  R2={:3}\n\
+                     Accel:   ({:7.3},{:7.3},{:7.3}) g\n\
+                     Gyro:    ({:8.1},{:8.1},{:8.1}) dps",
+                    frame.left_stick_x,
+                    frame.left_stick_y,
+                    frame.right_stick_x,
+                    frame.right_stick_y,
+                    frame.analog_l2,
+                    frame.analog_r2,
                     frame.accel_x,
                     frame.accel_y,
                     frame.accel_z,

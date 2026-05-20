@@ -1,16 +1,20 @@
 use std::sync::{Arc, atomic, mpsc};
 use std::thread;
+use std::time::{Duration, Instant};
 
 use crate::READ_ATOMIC_BOOL_ORDERING;
-use crate::devices::device::{self, GyroFrame};
+use crate::devices::device;
+use crate::dsu::DSUFrame;
 use crate::errors::DeviceError;
 
-/// Number of frozen frames before giving up and exiting (~1 second at 100Hz).
-/// This allows recovery when Steam takes the controller and changes IMU mode.
-const FROZEN_EXIT_THRESHOLD: usize = 100;
+/// Number of identical IMU frames before we consider the IMU frozen.
+/// At 100 Hz this is 1 second
+const FROZEN_DETECT_THRESHOLD: usize = 100;
+/// Retry interval for re-initializing the device when the IMU is frozen
+const REINIT_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 /// Number of consecutive failed reads before assuming disconnect.
 /// At 100Hz this is ~1 second of no data.
-const DISCONNECT_THRESHOLD: usize = 10;
+const DISCONNECT_THRESHOLD: usize = 100;
 
 /// Background reader that continuously parses frames from a device
 pub struct Reader {
@@ -24,8 +28,8 @@ impl Reader {
     pub fn start(
         running: Arc<atomic::AtomicBool>,
         device: impl device::Device + std::marker::Send + 'static,
-    ) -> (Self, mpsc::Receiver<GyroFrame>) {
-        let (tx, rx) = mpsc::channel::<GyroFrame>();
+    ) -> (Self, mpsc::Receiver<DSUFrame>) {
+        let (tx, rx) = mpsc::channel::<DSUFrame>();
 
         let handle = thread::spawn(move || {
             let mut frame_state = FrameState::new();
@@ -56,8 +60,9 @@ impl Reader {
 struct FrameState {
     pub frozen_count: usize,
     pub total_frames: usize,
-    pub prev_frame: Option<GyroFrame>,
+    pub prev_frame: Option<DSUFrame>,
     pub fail_count: usize,
+    pub last_init_attempt: Option<Instant>,
 }
 
 impl FrameState {
@@ -67,12 +72,13 @@ impl FrameState {
             total_frames: 0,
             prev_frame: None,
             fail_count: 0,
+            last_init_attempt: None,
         }
     }
 }
 
 /// Read a frame, returning true if another should be read.
-fn read_frame<D>(device: &D, frame_state: &mut FrameState, tx: &mpsc::Sender<GyroFrame>) -> bool
+fn read_frame<D>(device: &D, frame_state: &mut FrameState, tx: &mpsc::Sender<DSUFrame>) -> bool
 where
     D: device::Device + std::marker::Send + 'static,
 {
@@ -82,44 +88,62 @@ where
             frame_state.total_frames += 1;
 
             // Check for frozen/stale IMU data
-            // This is observed behavior when Steam disables the Gyro
-            let is_frozen = frame_state
+            // This is observed behavior when Steam disables the IMU on Steam devices
+            let is_imu_frozen = frame_state
                 .prev_frame
-                .map(|prev| frame == prev)
+                .map(|prev| {
+                    frame.accel_x == prev.accel_x
+                        && frame.accel_y == prev.accel_y
+                        && frame.accel_z == prev.accel_z
+                        && frame.gyro_x == prev.gyro_x
+                        && frame.gyro_y == prev.gyro_y
+                        && frame.gyro_z == prev.gyro_z
+                })
                 .unwrap_or(false);
 
-            if is_frozen {
+            let mut frame_to_send = frame;
+
+            if is_imu_frozen {
                 frame_state.frozen_count += 1;
-                if frame_state.frozen_count >= FROZEN_EXIT_THRESHOLD {
+
+                if frame_state.frozen_count == FROZEN_DETECT_THRESHOLD {
                     log::warn!(
-                        "IMU data frozen ({} identical frames). Steam likely disabled the gyro..",
+                        "IMU data frozen ({} identical frames). Steam likely disabled the IMU.",
                         frame_state.frozen_count
                     );
-                    return false;
                 }
 
-                frame_state.prev_frame = Some(frame);
-                return true;
-            }
+                // Periodically attempt to re-enable the IMU
+                if frame_state.frozen_count >= FROZEN_DETECT_THRESHOLD {
+                    let should_try = frame_state
+                        .last_init_attempt
+                        .map(|t| t.elapsed() >= REINIT_RETRY_INTERVAL)
+                        .unwrap_or(true);
+                    if should_try {
+                        frame_state.last_init_attempt = Some(Instant::now());
+                        if let Err(e) = device.initialize() {
+                            log::warn!("Failed to reinitialize device while IMU frozen: {e}");
+                        } else {
+                            log::info!("Reinitialized device while IMU was frozen.");
+                        }
+                    }
+                }
 
-            frame_state.frozen_count = 0;
-
-            if frame_state.total_frames.is_multiple_of(100) {
-                log::debug!(
-                    "Reader: frame {} sent, accel=({:.3},{:.3},{:.3}), gyro=({:.3},{:.3},{:.3})",
-                    frame_state.total_frames,
-                    frame.accel_x,
-                    frame.accel_y,
-                    frame.accel_z,
-                    frame.gyro_x,
-                    frame.gyro_y,
-                    frame.gyro_z
-                );
+                // Zero out motion data so clients don't drift on stale values
+                frame_to_send.accel_x = 0.0;
+                frame_to_send.accel_y = 0.0;
+                frame_to_send.accel_z = 0.0;
+                frame_to_send.gyro_x = 0.0;
+                frame_to_send.gyro_y = 0.0;
+                frame_to_send.gyro_z = 0.0;
+            } else {
+                frame_state.frozen_count = 0;
+                frame_state.last_init_attempt = None;
             }
 
             frame_state.prev_frame = Some(frame);
 
-            if tx.send(frame).is_err() {
+            if tx.send(frame_to_send).is_err() {
                 log::debug!("Receiver has hung up, reader thread exiting");
                 return false;
             }

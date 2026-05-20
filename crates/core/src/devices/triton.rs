@@ -3,7 +3,11 @@ use std::fs::OpenOptions;
 use std::os::unix::io::AsRawFd;
 use std::time::Duration;
 
-use crate::devices::device::{Device, GyroFrame};
+use crate::devices::device::Device;
+use crate::devices::util::{
+    is_u32_masked_button_pressed, scale_stick_to_byte, scale_trigger_to_byte,
+};
+use crate::dsu::DSUFrame;
 use crate::errors::DeviceError;
 
 /// Steam Controller vendor/product IDs.
@@ -41,7 +45,30 @@ pub const REPORT_SIZE: usize = 54;
 
 /// Sensor scale factors
 pub const ACCEL_PER_G: f32 = 16384.0;
-pub const GYRO_PER_DPS: f32 = 16.0;
+pub const GYRO_PER_DPS: f32 = 16.384;
+
+const ANALOG_TRIGGER_TO_DIGITAL_THRESHOLD: u8 = 228; // ~90%
+
+pub const MASK_A: u32 = 0x0000_0001;
+pub const MASK_B: u32 = 0x0000_0002;
+pub const MASK_X: u32 = 0x0000_0004;
+pub const MASK_Y: u32 = 0x0000_0008;
+pub const MASK_QAM: u32 = 0x0000_0010;
+pub const MASK_R3: u32 = 0x0000_0020;
+pub const MASK_VIEW: u32 = 0x0000_0040;
+// pub const MASK_R4: u32 = 0x0000_0080;
+// pub const MASK_R5: u32 = 0x0000_0100;
+pub const MASK_R: u32 = 0x0000_0200;
+pub const MASK_DPAD_DOWN: u32 = 0x0000_0400;
+pub const MASK_DPAD_RIGHT: u32 = 0x0000_0800;
+pub const MASK_DPAD_LEFT: u32 = 0x0000_1000;
+pub const MASK_DPAD_UP: u32 = 0x0000_2000;
+pub const MASK_MENU: u32 = 0x0000_4000;
+pub const MASK_L3: u32 = 0x0000_8000;
+pub const MASK_STEAM: u32 = 0x0001_0000;
+// pub const MASK_L4: u32 = 0x0002_0000;
+// pub const MASK_L5: u32 = 0x0004_0000;
+pub const MASK_L: u32 = 0x0008_0000;
 
 /// Parsed Triton full-state frame
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -113,15 +140,42 @@ impl TritonFrame {
     }
 }
 
-impl From<TritonFrame> for GyroFrame {
+impl From<TritonFrame> for DSUFrame {
     fn from(value: TritonFrame) -> Self {
-        GyroFrame {
-            accel_x: value.accel_x as f32 / ACCEL_PER_G,
-            accel_y: value.accel_y as f32 / ACCEL_PER_G,
-            accel_z: value.accel_z as f32 / ACCEL_PER_G,
-            gyro_x: value.gyro_x as f32 / GYRO_PER_DPS,
-            gyro_y: value.gyro_y as f32 / GYRO_PER_DPS,
-            gyro_z: value.gyro_z as f32 / GYRO_PER_DPS,
+        let l2 = scale_trigger_to_byte(value.trigger_left);
+        let r2 = scale_trigger_to_byte(value.trigger_right);
+
+        DSUFrame {
+            dpad_left: is_u32_masked_button_pressed(value.buttons, MASK_DPAD_LEFT),
+            dpad_down: is_u32_masked_button_pressed(value.buttons, MASK_DPAD_DOWN),
+            dpad_right: is_u32_masked_button_pressed(value.buttons, MASK_DPAD_RIGHT),
+            dpad_up: is_u32_masked_button_pressed(value.buttons, MASK_DPAD_UP),
+            options: is_u32_masked_button_pressed(value.buttons, MASK_VIEW),
+            r3: is_u32_masked_button_pressed(value.buttons, MASK_R3),
+            l3: is_u32_masked_button_pressed(value.buttons, MASK_L3),
+            share: is_u32_masked_button_pressed(value.buttons, MASK_MENU),
+            y: is_u32_masked_button_pressed(value.buttons, MASK_Y),
+            b: is_u32_masked_button_pressed(value.buttons, MASK_B),
+            a: is_u32_masked_button_pressed(value.buttons, MASK_A),
+            x: is_u32_masked_button_pressed(value.buttons, MASK_X),
+            r1: is_u32_masked_button_pressed(value.buttons, MASK_R),
+            l1: is_u32_masked_button_pressed(value.buttons, MASK_L),
+            r2: r2 >= ANALOG_TRIGGER_TO_DIGITAL_THRESHOLD,
+            l2: l2 >= ANALOG_TRIGGER_TO_DIGITAL_THRESHOLD,
+            home: is_u32_masked_button_pressed(value.buttons, MASK_STEAM),
+            touch: is_u32_masked_button_pressed(value.buttons, MASK_QAM),
+            left_stick_x: scale_stick_to_byte(value.left_stick_x),
+            left_stick_y: scale_stick_to_byte(value.left_stick_y),
+            right_stick_x: scale_stick_to_byte(value.right_stick_x),
+            right_stick_y: scale_stick_to_byte(value.right_stick_y),
+            analog_r2: r2,
+            analog_l2: l2,
+            accel_x: -(value.accel_x as f32 / ACCEL_PER_G),
+            accel_y: -(value.accel_z as f32 / ACCEL_PER_G),
+            accel_z: (value.accel_y as f32 / ACCEL_PER_G),
+            gyro_x: (value.gyro_x as f32 / GYRO_PER_DPS),
+            gyro_y: -(value.gyro_z as f32 / GYRO_PER_DPS),
+            gyro_z: (value.gyro_y as f32 / GYRO_PER_DPS),
         }
     }
 }
@@ -140,8 +194,8 @@ impl Device for LinuxTriton {
         Ok(())
     }
 
-    /// Read a single gyro frame from the controller.
-    fn read_frame(&self) -> Result<GyroFrame, DeviceError> {
+    /// Read a single DSU frame from the controller.
+    fn read_frame(&self) -> Result<DSUFrame, DeviceError> {
         let mut buf = [0u8; 64];
         let n = self.hid.read_timeout(&mut buf, READ_TIMOUT_MILLIS)?;
         if n < TritonFrame::REPORT_SIZE {
