@@ -1,3 +1,8 @@
+//! Core library for [`steam-controller-dsu`].
+//!
+//! This crate is not intended to be used outside of the project. It could be, but it is not
+//! sufficiently documented.
+
 #[cfg(target_os = "windows")]
 compile_error!("This crate does not support Windows.");
 
