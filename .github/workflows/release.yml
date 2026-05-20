@@ -62,15 +62,6 @@ jobs:
       - name: Publish scdsu-core
         run: cargo publish -p scdsu-core --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
       
-      - name: Wait for crates.io indexing
-        run: sleep 30
-
-      - name: Publish scdsu-cli
-        run: cargo publish -p scdsu-cli --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Wait for crates.io indexing
-        run: sleep 30
-
       - name: Publish steam-controller-dsu
         run: cargo publish -p steam-controller-dsu --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
