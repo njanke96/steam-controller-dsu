@@ -94,6 +94,7 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+          skip-decompress: true
 
       - name: Create release
         uses: softprops/action-gh-release@v3
