@@ -1,4 +1,4 @@
-//! Core library for [`steam-controller-dsu`].
+//! Core library for `steam-controller-dsu`.
 //!
 //! This crate provides functions to run a CemuHook (DSU) server which supplies controller input
 //! state over a UDP connection to emulators.
@@ -20,7 +20,6 @@ use std::time::Duration;
 
 use crate::devices::device::Device;
 use crate::errors::{DeviceError, ServerError};
-use crate::reader::Reader;
 
 pub(crate) const READ_ATOMIC_BOOL_ORDERING: atomic::Ordering = atomic::Ordering::Relaxed;
 const CONTROLLER_OPEN_RETRY_DELAY_SEC: u64 = 5;
@@ -64,7 +63,7 @@ pub fn run_server(
         // Start the device reader and cemuhook udp server
         //
 
-        let (reader, rx) = Reader::start(running.clone(), device);
+        let (reader_handle, rx) = reader::spawn_reader(running.clone(), device);
 
         let udp_server = server::Server::new(running.clone(), config.clone())?;
 
@@ -82,7 +81,7 @@ pub fn run_server(
             }
         }
 
-        if let Err(err) = reader.join() {
+        if let Err(err) = reader_handle.join() {
             log::error!("Reader thread panicked: {err:?}");
         }
 
@@ -109,7 +108,7 @@ pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceErro
     device.initialize()?;
     log::info!("Initialized. Dumping frames...");
 
-    let (reader, rx) = Reader::start(running.clone(), device);
+    let (reader_handle, rx) = reader::spawn_reader(running.clone(), device);
 
     while running.load(READ_ATOMIC_BOOL_ORDERING) {
         match rx.recv() {
@@ -186,7 +185,7 @@ pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceErro
     }
 
     drop(rx);
-    if let Err(err) = reader.join() {
+    if let Err(err) = reader_handle.join() {
         log::error!("Reader thread panicked: {err:?}");
     }
 
