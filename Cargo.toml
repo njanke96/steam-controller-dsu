@@ -7,7 +7,7 @@ description = "DSU (CemuHook) server for the Gyro on Steam Controller (2026)"
 homepage = "https://github.com/njanke96/steam-controller-dsu"
 repository = "https://github.com/njanke96/steam-controller-dsu"
 documentation = "https://github.com/njanke96/steam-controller-dsu"
-keywords = ["steam", "controller", "cemuhook", "dsu", "triton", "hid"]
+keywords = ["steam", "controller", "cemuhook", "dsu", "hid"]
 
 [dependencies]
 scdsu-cli = { path = "crates/cli", version = "0.1.0" }
