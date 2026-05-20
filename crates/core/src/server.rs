@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::devices::device::GyroFrame;
+use crate::dsu::DSUFrame;
 use crate::errors::ServerError;
 use crate::{READ_ATOMIC_BOOL_ORDERING, dsu};
 
@@ -22,6 +22,8 @@ pub struct ServerConfig {
     pub port: u16,
     /// Invert the yaxis values on the gyro and accelerometer
     pub invert_pitch: bool,
+    /// CemuHook controller slot to report on (0-3)
+    pub slot: u8,
 }
 #[derive(Debug)]
 struct Client {
@@ -48,7 +50,7 @@ struct SendThreadContext {
     pub clients: Arc<Mutex<Vec<Client>>>,
     pub config: ServerConfig,
     pub socket: UdpSocket,
-    pub rx: mpsc::Receiver<GyroFrame>,
+    pub rx: mpsc::Receiver<DSUFrame>,
 }
 
 type ThreadResults = (
@@ -87,7 +89,7 @@ impl Server {
     /// Start the CemuHook UDP server and broadcast frames received on `rx` to all subscribed CemuHook clients
     /// Blocks until both the Receving loop (this thread) and Send loop (background thread) complete
     /// Returns both results on Success, Err(ServerError) if the server failed to start
-    pub fn run(&self, rx: mpsc::Receiver<GyroFrame>) -> Result<ThreadResults, ServerError> {
+    pub fn run(&self, rx: mpsc::Receiver<DSUFrame>) -> Result<ThreadResults, ServerError> {
         let send_context = SendThreadContext {
             main_thread_running: self.main_thread_running.clone(),
             server_thread_running: self.server_thread_running.clone(),
@@ -168,8 +170,15 @@ impl Server {
 
         match event_type {
             VERSION_TYPE => handle_version_request(client_id, addr, socket),
-            INFO_TYPE => handle_info_request(buf, client_id, addr, socket),
-            DATA_TYPE => handle_data_request(buf, msg_len, client_id, addr, &self.clients),
+            INFO_TYPE => handle_info_request(buf, client_id, addr, socket, self.config.slot),
+            DATA_TYPE => handle_data_request(
+                buf,
+                msg_len,
+                client_id,
+                addr,
+                &self.clients,
+                self.config.slot,
+            ),
             _ => {
                 log::trace!("Unhandled event type 0x{:06x} from {}", event_type, addr);
             }
@@ -241,9 +250,10 @@ impl Server {
                 );
 
                 log::trace!(
-                    "Packet {} to {}: accel=({:.3}, {:.3}, {:.3}) gyro=({:.1}, {:.1}, {:.1})",
+                    "Packet {} to {} (slot={}): accel=({:.3}, {:.3}, {:.3}) gyro=({:.1}, {:.1}, {:.1})",
                     client.packet_counter,
                     client.addr,
+                    client.slot,
                     frame.accel_x,
                     frame.accel_y,
                     frame.accel_z,
@@ -270,19 +280,25 @@ fn handle_version_request(client_id: u32, addr: &SocketAddr, socket: &UdpSocket)
     }
 }
 
-fn handle_info_request(buf: &[u8; 256], client_id: u32, addr: &SocketAddr, socket: &UdpSocket) {
+fn handle_info_request(
+    buf: &[u8; 256],
+    client_id: u32,
+    addr: &SocketAddr,
+    socket: &UdpSocket,
+    configured_slot: u8,
+) {
     let mut info_buf = [0u8; 32];
     // Parse requested slots.
     let port_cnt = i32::from_le_bytes([buf[20], buf[21], buf[22], buf[23]]) as usize;
     let requested = port_cnt.min(4);
     for i in 0..requested {
         let slot = buf[24 + i];
-        // Report our single controller as connected on every
-        // requested slot so clients don't have to be
-        // configured for slot 0 specifically.
-        dsu::write_info_response(&mut info_buf, slot, client_id, true);
-        if let Err(e) = socket.send_to(&info_buf, addr) {
-            log::warn!("Failed to send info response to {}: {}", addr, e);
+        if slot == configured_slot {
+            dsu::write_info_response(&mut info_buf, slot, client_id, true);
+            if let Err(e) = socket.send_to(&info_buf, addr) {
+                log::warn!("Failed to send info response to {}: {}", addr, e);
+            }
+            break;
         }
     }
 }
@@ -293,10 +309,21 @@ fn handle_data_request(
     client_id: u32,
     addr: &SocketAddr,
     clients: &Arc<Mutex<Vec<Client>>>,
+    configured_slot: u8,
 ) {
     // Parse requested slot from payload.
     // CemuHook DATA request: byte 20 = flags, byte 21 = slot.
     let requested_slot = if msg_len > 21 { buf[21] } else { 0 };
+
+    if requested_slot != configured_slot {
+        log::trace!(
+            "Ignoring data request from {} for slot {} (configured slot is {})",
+            addr,
+            requested_slot,
+            configured_slot
+        );
+        return;
+    }
 
     let Ok(mut list) = clients.lock() else {
         log::error!("Not handling data request, could not lock clients mutex...");

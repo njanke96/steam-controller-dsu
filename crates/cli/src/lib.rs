@@ -19,6 +19,10 @@ pub struct Args {
     /// Invert the pitch axis
     #[arg(long, default_value_t = false)]
     pub invert_pitch: bool,
+
+    /// CemuHook controller slot to report on (0-3). Controller number is slot + 1.
+    #[arg(long, default_value_t = 0)]
+    pub slot: u8,
 }
 
 /// The CLI entrypoint to be called from the root crate's `[[bin]]`
@@ -41,6 +45,11 @@ pub fn entrypoint() -> i32 {
 
     let args = Args::parse();
 
+    if args.slot > 3 {
+        log::error!("Invalid slot: {}. Slot must be between 0 and 3.", args.slot);
+        return 1;
+    }
+
     if args.debug {
         if let Err(err) = scdsu_core::run_debug_dump(running) {
             log::error!("Error from run_debug_dump: {err}");
@@ -52,6 +61,7 @@ pub fn entrypoint() -> i32 {
         bind_addr: args.bind_addr,
         port: args.port,
         invert_pitch: args.invert_pitch,
+        slot: args.slot,
     };
 
     log::debug!("Server configuration from cli args: {config:?}");
