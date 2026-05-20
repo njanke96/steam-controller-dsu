@@ -1,7 +1,7 @@
 //! Core library for `steam-controller-dsu`.
 //!
-//! This crate provides functions to run a CemuHook (DSU) server which supplies controller input
-//! state over a UDP connection to emulators.
+//! This library crate provides the ability to run CemuHook (DSU) server which supplies controller
+//! input state over a UDP connection to various video game console emulators.
 
 #[cfg(target_os = "windows")]
 compile_error!("This crate does not support Windows.");
@@ -18,13 +18,13 @@ use std::sync::Arc;
 use std::sync::atomic;
 use std::time::Duration;
 
-use crate::devices::device::Device;
+use crate::devices::Device;
 use crate::errors::{DeviceError, ServerError};
 
 pub(crate) const READ_ATOMIC_BOOL_ORDERING: atomic::Ordering = atomic::Ordering::Relaxed;
 const CONTROLLER_OPEN_RETRY_DELAY_SEC: u64 = 5;
 
-/// Run the server loop until receiving a signal.
+/// Run the server loop until `running` is `false`.
 ///
 /// Accepts an [`AtomicBool`](std::sync::atomic::AtomicBool) within an `Arc<>` for signaling when
 /// the server should shut down (set to `false`).
@@ -94,7 +94,8 @@ pub fn run_server(
     }
 }
 
-/// Runs a debug loop, dumping DSU-compatible frames to stdout for debugging purposes.
+/// Runs a debug loop, dumping DSU-compatible frames to stdout for debugging purposes. Like
+/// [`run_server`], it runs until `running` is false.
 ///
 /// Accepts an [`AtomicBool`](std::sync::atomic::AtomicBool) within an `Arc<>` for signaling when
 /// the server should shut down.
@@ -102,7 +103,7 @@ pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceErro
     let api = hidapi::HidApi::new()?;
 
     // If more devices are ever supported, add selection logic
-    let device = devices::triton::linux_find_and_open(&api)?;
+    let device = devices::triton::find(&api)?;
 
     log::info!("Controller opened. Running initialization...");
     device.initialize()?;
@@ -198,14 +199,14 @@ pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceErro
 fn open_controller_with_retry(
     running: Arc<atomic::AtomicBool>,
     api: &hidapi::HidApi,
-) -> Option<impl devices::device::Device + use<>> {
+) -> Option<impl devices::Device + use<>> {
     loop {
         if !running.load(READ_ATOMIC_BOOL_ORDERING) {
             return None;
         }
 
         // If more devices are ever supported, add selection logic
-        match devices::triton::linux_find_and_open(api) {
+        match devices::triton::find(api) {
             Ok(d) => return Some(d),
             Err(e) => {
                 log::warn!(

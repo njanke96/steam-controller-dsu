@@ -1,11 +1,11 @@
-//! This module provides a Reader for reading [`DSUFrame`](crate::dsu::DSUFrame) data from devices.
+//! Provides a background reader for reading [`DSUFrame`](crate::dsu::DSUFrame) data from devices.
 
 use std::sync::{Arc, atomic, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::READ_ATOMIC_BOOL_ORDERING;
-use crate::devices::device;
+use crate::devices::Device;
 use crate::dsu::DSUFrame;
 use crate::errors::DeviceError;
 
@@ -23,7 +23,7 @@ const DISCONNECT_THRESHOLD: usize = 100;
 /// Returns a [`JoinHandle`](std::thread::JoinHandle) and a mpsc Receiver for receiving frame data.
 pub fn spawn_reader(
     running: Arc<atomic::AtomicBool>,
-    device: impl device::Device + std::marker::Send + 'static,
+    device: impl Device + std::marker::Send + 'static,
 ) -> (std::thread::JoinHandle<()>, mpsc::Receiver<DSUFrame>) {
     let (tx, rx) = mpsc::channel::<DSUFrame>();
 
@@ -70,7 +70,7 @@ impl FrameState {
 /// Read a frame, returning true if another should be read.
 fn read_frame<D>(device: &D, frame_state: &mut FrameState, tx: &mpsc::Sender<DSUFrame>) -> bool
 where
-    D: device::Device + std::marker::Send + 'static,
+    D: Device + std::marker::Send + 'static,
 {
     match device.read_frame() {
         Ok(frame) => {
