@@ -2,9 +2,19 @@
 
 This is a DSU (CemuHook) UDP server, currently supporting the Gyro data of the 2026 Steam Controller on Linux. Windows is not supported at this time.
 
+## Tested Emulators
+
+- Cemu
+  - Quirk: Through Steam input, make sure the controller has no bindings. You need to map controls in Cemu settings through the DSU server,
+    existing bindings can mess up the process.
+- Ryujinx
+- Eden
+- Azahar
+  - Quirk: If the server is stopped while the emulator is running motion controls might not work until the emulator is started.
+
 ## Install
 
-This is not yet published as I'm still refining the implementation and testing it myself. I plan to publish to crates.io eventually.
+I plan to publish to crates.io eventually.
 
 ## Usage
 
@@ -16,6 +26,7 @@ Options:
       --bind-addr <BIND_ADDR>  UDP bind address for the CemuHook server [default: 0.0.0.0]
       --port <PORT>            UDP port for the CemuHook server [default: 26760]
       --invert-pitch           Invert the pitch axis
+      --slot <SLOT>            CemuHook controller slot to report on (0-3 for Controllers 1 through 4). [default: 0]
   -h, --help                   Print help
 ```
 
@@ -29,7 +40,7 @@ Options:
 
 - Support Windows
 - Support Steam Input-like configuration options (Gyro deadzone, sensitivity, etc)
-- Support more devices (Steam Deck, 2015 Steam Controller, future Steam Devices)
+- Support more devices (Steam Deck, 2015 Steam Controller, future Steam Devices, non-Steam devices?)
 
 ## AI Usage
 

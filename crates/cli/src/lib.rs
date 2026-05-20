@@ -20,7 +20,7 @@ pub struct Args {
     #[arg(long, default_value_t = false)]
     pub invert_pitch: bool,
 
-    /// CemuHook controller slot to report on (0-3). Controller number is slot + 1.
+    /// CemuHook controller slot to report on (0-3 for Controllers 1 through 4). Controller number is slot + 1.
     #[arg(long, default_value_t = 0)]
     pub slot: u8,
 }
