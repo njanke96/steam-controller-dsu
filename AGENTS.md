@@ -5,10 +5,10 @@ A Rust reimplementation of SteamDeckGyroDSU for the **new 2026 Steam Controller*
 
 ## Crates
 
-- `crates/cli`: CLI entrypoint for running the UDP server and debugging Steam Controller gyro output.
-  All code in this crate must directly involve the CLI interface. It should always be possible to replace this crate with another interface
-  such as a gui and have the exact same behavior under a different interface.
-- `crates/core`: Core library crate. All device reporting and UDP server logic lives in here, accessible through library functions.
+- **Root package (`steam-controller-dsu`):** CLI entrypoint for running the UDP server and debugging Steam Controller gyro output.
+  All code in this crate directly involves the CLI interface. It should always be possible to replace this crate with another interface
+  such as a GUI and have the exact same behavior under a different interface.
+- `crates/core`: Core library crate (`scdsu-core`). All device reporting and UDP server logic lives in here, accessible through library functions.
 
 ## Critical Hardware Findings
 
