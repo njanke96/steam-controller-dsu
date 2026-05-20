@@ -70,14 +70,14 @@ pub fn run_server(
         match udp_server.run(rx) {
             Ok((recv_result, send_result)) => {
                 if let Err(e) = recv_result {
-                    log::error!("UDP receive loop error: {e}");
+                    log::error!("UDP server receive loop error: {e}");
                 }
                 if let Err(err) = send_result {
-                    log::error!("UDP send thread panicked: {err:?}");
+                    log::error!("UDP server send thread panicked: {err:?}");
                 }
             }
             Err(e) => {
-                log::error!("Failed to clone UDP socket for send thread: {e}");
+                log::error!("Failed to start the UDP server: {e}");
             }
         }
 
