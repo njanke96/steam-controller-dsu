@@ -10,10 +10,14 @@ documentation = "https://github.com/njanke96/steam-controller-dsu"
 keywords = ["steam", "controller", "cemuhook", "dsu", "hid"]
 
 [dependencies]
-scdsu-cli = { path = "crates/cli", version = "0.1.3" }
+scdsu-core = { path = "crates/core", version = "=0.1.3" }
+clap = { version = "4", features = ["derive"] }
+env_logger = "0.11"
+log = { workspace = true }
+ctrlc = {workspace = true }
 
 [workspace]
-members = ["crates/core", "crates/cli"]
+members = ["crates/core"]
 resolver = "3"
 
 [workspace.dependencies]
