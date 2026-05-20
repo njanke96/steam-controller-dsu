@@ -1,3 +1,7 @@
+//! CLI interface for [`steam-controller-dsu`].
+//!
+//! This crate is not intended to be used as a standalone library.
+
 use std::sync::{Arc, atomic};
 
 use clap::Parser;
