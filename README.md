@@ -16,8 +16,9 @@ This is a DSU (CemuHook) UDP server, currently supporting the Gyro data of the 2
 
 ### Cargo
 
-1. Ensure you have development files for `libudev` (`libudev-dev` on Debian, `systemd-devel` on Fedora, `systemd` on Arch, `eudev-libudev-devel` on Void)
-2. `cargo install steam-controller-dsu`
+1. [Install Rust and Cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html#install-rust-and-cargo)
+2. Ensure you have development files for `libudev` (`libudev-dev` on Debian, `systemd-devel` on Fedora, `systemd` on Arch, `eudev-libudev-devel` on Void)
+3. `cargo install steam-controller-dsu`
 
 ### Manual
 
