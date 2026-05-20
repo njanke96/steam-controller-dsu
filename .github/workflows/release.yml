@@ -51,6 +51,8 @@ jobs:
   publish-crate:
     name: Publish to crates.io
     needs: build-binaries
+    permissions:
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
