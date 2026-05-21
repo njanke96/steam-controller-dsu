@@ -3,6 +3,7 @@ use std::sync::{Arc, atomic};
 use clap::Parser;
 
 #[derive(Parser)]
+#[command(version)]
 pub struct Args {
     /// Run in debug mode: open the controller and dump raw IMU frames.
     #[arg(long, default_value_t = false)]
@@ -23,6 +24,10 @@ pub struct Args {
     /// CemuHook controller slot to report on (0-3 for Controllers 1 through 4). Controller number is slot + 1.
     #[arg(long, default_value_t = 0)]
     pub slot: u8,
+
+    /// Specific device path to open. Example: /dev/hidraw11
+    #[arg(long)]
+    pub device_path: Option<String>,
 }
 
 pub fn entrypoint() -> i32 {
@@ -50,7 +55,7 @@ pub fn entrypoint() -> i32 {
     }
 
     if args.debug {
-        if let Err(err) = scdsu_core::run_debug_dump(running) {
+        if let Err(err) = scdsu_core::run_debug_dump(running, args.device_path.as_deref()) {
             log::error!("Error from run_debug_dump: {err}");
         }
         return 1;
@@ -61,6 +66,7 @@ pub fn entrypoint() -> i32 {
         port: args.port,
         invert_pitch: args.invert_pitch,
         slot: args.slot,
+        device_path: args.device_path,
     };
 
     log::debug!("Server configuration from cli args: {config:?}");

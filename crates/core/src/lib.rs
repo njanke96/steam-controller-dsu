@@ -1,7 +1,8 @@
 //! Core library for `steam-controller-dsu`.
 //!
 //! This library crate provides the ability to run CemuHook (DSU) server which supplies controller
-//! input state over a UDP connection to various video game console emulators.
+//! input state over a UDP connection to various video game console emulators. The main focus is supporting
+//! the Steam Controller 2026 (Triton).
 
 #[cfg(target_os = "windows")]
 compile_error!("This crate does not support Windows.");
@@ -43,7 +44,9 @@ pub fn run_server(
             log::warn!("Failed to refresh HID device list: {e}");
         }
 
-        let Some(device) = open_controller_with_retry(running.clone(), &api) else {
+        let Some(device) =
+            open_controller_with_retry(running.clone(), &api, config.device_path.as_deref())
+        else {
             // Interrupted by signal
             return Ok(());
         };
@@ -99,11 +102,14 @@ pub fn run_server(
 ///
 /// Accepts an [`AtomicBool`](std::sync::atomic::AtomicBool) within an `Arc<>` for signaling when
 /// the server should shut down.
-pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceError> {
+pub fn run_debug_dump(
+    running: Arc<atomic::AtomicBool>,
+    device_path: Option<&str>,
+) -> Result<(), DeviceError> {
     let api = hidapi::HidApi::new()?;
 
     // If more devices are ever supported, add selection logic
-    let device = devices::triton::find(&api)?;
+    let device = devices::triton::find(&api, device_path)?;
 
     log::info!("Controller opened. Running initialization...");
     device.initialize()?;
@@ -199,6 +205,7 @@ pub fn run_debug_dump(running: Arc<atomic::AtomicBool>) -> Result<(), DeviceErro
 fn open_controller_with_retry(
     running: Arc<atomic::AtomicBool>,
     api: &hidapi::HidApi,
+    device_path: Option<&str>,
 ) -> Option<impl devices::Device + use<>> {
     loop {
         if !running.load(READ_ATOMIC_BOOL_ORDERING) {
@@ -206,7 +213,7 @@ fn open_controller_with_retry(
         }
 
         // If more devices are ever supported, add selection logic
-        match devices::triton::find(api) {
+        match devices::triton::find(api, device_path) {
             Ok(d) => return Some(d),
             Err(e) => {
                 log::warn!(
