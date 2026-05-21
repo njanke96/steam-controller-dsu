@@ -1,7 +1,8 @@
 //! Core library for `steam-controller-dsu`.
 //!
 //! This library crate provides the ability to run CemuHook (DSU) server which supplies controller
-//! input state over a UDP connection to various video game console emulators.
+//! input state over a UDP connection to various video game console emulators. The main focus is supporting
+//! the Steam Controller 2026 (Triton).
 
 #[cfg(target_os = "windows")]
 compile_error!("This crate does not support Windows.");
