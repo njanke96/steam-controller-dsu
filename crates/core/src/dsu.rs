@@ -220,3 +220,227 @@ fn get_bitmask(bits: &[(bool, u8)]) -> u8 {
     }
     mask
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_bitmask_empty() {
+        assert_eq!(get_bitmask(&[]), 0);
+    }
+
+    #[test]
+    fn test_get_bitmask_single_bit() {
+        assert_eq!(get_bitmask(&[(true, 0)]), 0b00000001);
+        assert_eq!(get_bitmask(&[(true, 7)]), 0b10000000);
+    }
+
+    #[test]
+    fn test_get_bitmask_multiple_bits() {
+        assert_eq!(get_bitmask(&[(true, 0), (true, 1), (true, 2)]), 0b00000111);
+        assert_eq!(get_bitmask(&[(true, 0), (true, 7)]), 0b10000001);
+    }
+
+    #[test]
+    fn test_write_version_response() {
+        let mut buf = [0u8; 22];
+        write_version_response(&mut buf, 0x12345678);
+
+        assert_eq!(&buf[0..4], b"DSUS");
+        assert_eq!(u16::from_le_bytes([buf[4], buf[5]]), 1001);
+        assert_eq!(u16::from_le_bytes([buf[6], buf[7]]), 2);
+        assert_eq!(
+            u32::from_le_bytes([buf[12], buf[13], buf[14], buf[15]]),
+            0x12345678
+        );
+        assert_eq!(
+            u32::from_le_bytes([buf[16], buf[17], buf[18], buf[19]]),
+            0x100000
+        );
+        assert_eq!(u16::from_le_bytes([buf[20], buf[21]]), 1001);
+    }
+
+    #[test]
+    fn test_write_info_response_connected() {
+        let mut buf = [0u8; 32];
+        write_info_response(&mut buf, 1, 0xABCD_EF01, true);
+
+        assert_eq!(&buf[0..4], b"DSUS");
+        assert_eq!(u16::from_le_bytes([buf[6], buf[7]]), 16);
+        assert_eq!(
+            u32::from_le_bytes([buf[12], buf[13], buf[14], buf[15]]),
+            0xABCD_EF01
+        );
+        assert_eq!(buf[20], 1);
+        assert_eq!(buf[21], 2);
+        assert_eq!(buf[22], 2);
+        assert_eq!(buf[23], 1);
+    }
+
+    #[test]
+    fn test_write_info_response_disconnected() {
+        let mut buf = [0u8; 32];
+        write_info_response(&mut buf, 0, 0, false);
+
+        assert_eq!(&buf[0..4], b"DSUS");
+        assert_eq!(buf[20], 0);
+        assert_eq!(buf[21], 0);
+        assert_eq!(buf[22], 0);
+        assert_eq!(buf[23], 0);
+    }
+
+    fn create_test_frame() -> DSUFrame {
+        DSUFrame {
+            dpad_left: true,
+            dpad_down: false,
+            dpad_right: true,
+            dpad_up: false,
+            options: true,
+            r3: false,
+            l3: true,
+            share: false,
+            y: true,
+            b: false,
+            a: true,
+            x: false,
+            r1: true,
+            l1: false,
+            r2: true,
+            l2: false,
+            home: true,
+            touch: false,
+            left_stick_x: 128,
+            left_stick_y: 64,
+            right_stick_x: 200,
+            right_stick_y: 50,
+            analog_r2: 200,
+            analog_l2: 100,
+            accel_x: 1.0,
+            accel_y: 0.5,
+            accel_z: -0.5,
+            gyro_x: 10.0,
+            gyro_y: -5.0,
+            gyro_z: 2.5,
+        }
+    }
+
+    #[test]
+    fn test_write_data_event_basic() {
+        let mut buf = [0u8; 100];
+        let frame = create_test_frame();
+        write_data_event(&mut buf, &frame, 12345, 0xDEAD_BEEF, 0, 1_000_000, false);
+
+        assert_eq!(&buf[0..4], b"DSUS");
+        assert_eq!(u16::from_le_bytes([buf[6], buf[7]]), 84);
+        assert_eq!(
+            u32::from_le_bytes([buf[12], buf[13], buf[14], buf[15]]),
+            0xDEAD_BEEF
+        );
+        assert_eq!(buf[20], 0);
+        assert_eq!(
+            u32::from_le_bytes([buf[32], buf[33], buf[34], buf[35]]),
+            12345
+        );
+    }
+
+    #[test]
+    fn test_write_data_event_buttons() {
+        let mut buf = [0u8; 100];
+        let frame = create_test_frame();
+        write_data_event(&mut buf, &frame, 0, 0, 0, 0, false);
+
+        assert_eq!(buf[36], 0b1010_1010);
+        assert_eq!(buf[37], 0b1010_1010);
+        assert_eq!(buf[38], 1);
+        assert_eq!(buf[39], 0);
+    }
+
+    #[test]
+    fn test_write_data_event_sticks() {
+        let mut buf = [0u8; 100];
+        let frame = create_test_frame();
+        write_data_event(&mut buf, &frame, 0, 0, 0, 0, false);
+
+        assert_eq!(buf[40], 128);
+        assert_eq!(buf[41], 64);
+        assert_eq!(buf[42], 200);
+        assert_eq!(buf[43], 50);
+    }
+
+    #[test]
+    fn test_write_data_event_analog_buttons() {
+        let mut buf = [0u8; 100];
+        let frame = create_test_frame();
+        write_data_event(&mut buf, &frame, 0, 0, 0, 0, false);
+
+        assert_eq!(buf[44], 255);
+        assert_eq!(buf[45], 0);
+        assert_eq!(buf[46], 255);
+        assert_eq!(buf[47], 0);
+        assert_eq!(buf[48], 255);
+        assert_eq!(buf[49], 0);
+        assert_eq!(buf[50], 255);
+        assert_eq!(buf[51], 0);
+        assert_eq!(buf[52], 255);
+        assert_eq!(buf[53], 0);
+        assert_eq!(buf[54], 200);
+        assert_eq!(buf[55], 100);
+    }
+
+    #[test]
+    fn test_write_data_event_timestamp() {
+        let mut buf = [0u8; 100];
+        let frame = create_test_frame();
+        write_data_event(&mut buf, &frame, 0, 0, 0, 9_876_543_210, false);
+
+        assert_eq!(
+            u64::from_le_bytes(buf[68..76].try_into().unwrap()),
+            9_876_543_210
+        );
+    }
+
+    #[test]
+    fn test_write_data_event_accel_normal() {
+        let mut buf = [0u8; 100];
+        let frame = create_test_frame();
+        write_data_event(&mut buf, &frame, 0, 0, 0, 0, false);
+
+        assert_eq!(f32::from_le_bytes(buf[76..80].try_into().unwrap()), 1.0);
+        assert_eq!(f32::from_le_bytes(buf[80..84].try_into().unwrap()), 0.5);
+        assert_eq!(f32::from_le_bytes(buf[84..88].try_into().unwrap()), -0.5);
+    }
+
+    #[test]
+    fn test_write_data_event_accel_inverted() {
+        let mut buf = [0u8; 100];
+        let frame = create_test_frame();
+        write_data_event(&mut buf, &frame, 0, 0, 0, 0, true);
+
+        assert_eq!(f32::from_le_bytes(buf[76..80].try_into().unwrap()), 1.0);
+        assert_eq!(f32::from_le_bytes(buf[80..84].try_into().unwrap()), -0.5);
+        assert_eq!(f32::from_le_bytes(buf[84..88].try_into().unwrap()), -0.5);
+    }
+
+    #[test]
+    fn test_write_data_event_gyro_normal() {
+        let mut buf = [0u8; 100];
+        let frame = create_test_frame();
+        write_data_event(&mut buf, &frame, 0, 0, 0, 0, false);
+
+        assert_eq!(f32::from_le_bytes(buf[88..92].try_into().unwrap()), 10.0);
+        assert_eq!(f32::from_le_bytes(buf[92..96].try_into().unwrap()), -5.0);
+        assert_eq!(f32::from_le_bytes(buf[96..100].try_into().unwrap()), 2.5);
+    }
+
+    #[test]
+    fn test_write_data_event_gyro_inverted() {
+        let mut buf = [0u8; 100];
+        let frame = create_test_frame();
+        write_data_event(&mut buf, &frame, 0, 0, 0, 0, true);
+
+        assert_eq!(f32::from_le_bytes(buf[88..92].try_into().unwrap()), -10.0);
+        assert_eq!(f32::from_le_bytes(buf[92..96].try_into().unwrap()), 5.0);
+        assert_eq!(f32::from_le_bytes(buf[96..100].try_into().unwrap()), 2.5);
+    }
+}

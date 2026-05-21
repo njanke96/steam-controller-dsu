@@ -42,7 +42,7 @@ jobs:
 
       - name: Run tests
         if: matrix.job == 'test'
-        run: cargo test --all-features
+        run: cargo test --workspace --all-features
 
       - name: Release build
         if: matrix.job == 'build'

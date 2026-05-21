@@ -334,3 +334,80 @@ fn enable_imu_on_file(file: &std::fs::File) -> Result<(), DeviceError> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_report() -> [u8; 54] {
+        let mut buf = [0u8; 54];
+        buf[0] = REPORT_ID_TRITON_FULL;
+        buf
+    }
+
+    #[test]
+    fn test_parse_empty_report() {
+        let buf = empty_report();
+        let frame = TritonFrame::parse(&buf).unwrap();
+        assert_eq!(frame.seq_num, 0);
+        assert_eq!(frame.buttons, 0);
+        assert_eq!(frame.trigger_left, 0);
+        assert_eq!(frame.trigger_right, 0);
+        assert_eq!(frame.left_stick_x, 0);
+        assert_eq!(frame.left_stick_y, 0);
+        assert_eq!(frame.right_stick_x, 0);
+        assert_eq!(frame.right_stick_y, 0);
+        assert_eq!(frame.left_pad_x, 0);
+        assert_eq!(frame.left_pad_y, 0);
+        assert_eq!(frame.pressure_left, 0);
+        assert_eq!(frame.right_pad_x, 0);
+        assert_eq!(frame.right_pad_y, 0);
+        assert_eq!(frame.pressure_right, 0);
+        assert_eq!(frame.imu_timestamp, 0);
+        assert_eq!(frame.accel_x, 0);
+        assert_eq!(frame.accel_y, 0);
+        assert_eq!(frame.accel_z, 0);
+        assert_eq!(frame.gyro_x, 0);
+        assert_eq!(frame.gyro_y, 0);
+        assert_eq!(frame.gyro_z, 0);
+        assert_eq!(frame.quat_w, 0);
+        assert_eq!(frame.quat_x, 0);
+        assert_eq!(frame.quat_y, 0);
+        assert_eq!(frame.quat_z, 0);
+    }
+
+    #[test]
+    fn test_parse_rejects_wrong_report_id() {
+        let mut buf = empty_report();
+        buf[0] = 0x00;
+        assert!(TritonFrame::parse(&buf).is_none());
+
+        buf[0] = 0x43;
+        assert!(TritonFrame::parse(&buf).is_none());
+
+        buf[0] = 0x69;
+        assert!(TritonFrame::parse(&buf).is_none());
+    }
+
+    #[test]
+    fn test_parse_rejects_short_buffer() {
+        let buf = [0x42u8; 53];
+        assert!(TritonFrame::parse(&buf).is_none());
+
+        let buf = [0x42u8; 10];
+        assert!(TritonFrame::parse(&buf).is_none());
+    }
+
+    #[test]
+    fn test_parse_accepts_exact_size() {
+        let buf = empty_report();
+        assert!(TritonFrame::parse(&buf).is_some());
+    }
+
+    #[test]
+    fn test_parse_accepts_larger_buffer() {
+        let mut buf = [0u8; 64];
+        buf[0] = REPORT_ID_TRITON_FULL;
+        assert!(TritonFrame::parse(&buf).is_some());
+    }
+}
