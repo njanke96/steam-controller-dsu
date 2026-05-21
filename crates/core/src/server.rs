@@ -27,6 +27,8 @@ pub struct ServerConfig {
     pub invert_pitch: bool,
     /// CemuHook controller slot to report on (0-3)
     pub slot: u8,
+    /// Specific HID device path to use instead of auto-detecting
+    pub device_path: Option<String>,
 }
 
 #[derive(Debug)]

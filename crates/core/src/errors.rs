@@ -22,6 +22,9 @@ pub enum DeviceError {
     /// The Device failed to open
     #[error("Failed to open Device")]
     NoDeviceFound,
+    /// The device at path failed to open
+    #[error("Failed to open specefied device: {0}")]
+    NoDeviceFoundAtPath(String),
     /// A device operation resulted in a [`std::io::Error`]
     #[error("IO Error: {0}")]
     IO(#[from] std::io::Error),

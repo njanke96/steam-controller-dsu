@@ -37,12 +37,14 @@ This is a DSU (CemuHook) UDP server, currently supporting the Gyro data of the 2
 Usage: steam-controller-dsu [OPTIONS]
 
 Options:
-      --debug                  Run in debug mode: open the controller and dump raw IMU frames
-      --bind-addr <BIND_ADDR>  UDP bind address for the CemuHook server [default: 0.0.0.0]
-      --port <PORT>            UDP port for the CemuHook server [default: 26760]
-      --invert-pitch           Invert the pitch axis
-      --slot <SLOT>            CemuHook controller slot to report on (0-3 for Controllers 1 through 4). [default: 0]
-  -h, --help                   Print help
+      --debug                      Run in debug mode: open the controller and dump raw IMU frames
+      --bind-addr <BIND_ADDR>      UDP bind address for the CemuHook server [default: 0.0.0.0]
+      --port <PORT>                UDP port for the CemuHook server [default: 26760]
+      --invert-pitch               Invert the pitch axis
+      --slot <SLOT>                CemuHook controller slot to report on (0-3 for Controllers 1 through 4). Controller number is slot + 1 [default: 0]
+      --device-path <DEVICE_PATH>  Specific device path to open. Example: /dev/hidraw11
+  -h, --help                       Print help
+  -V, --version                    Print version
 ```
 
 ## Wishlist

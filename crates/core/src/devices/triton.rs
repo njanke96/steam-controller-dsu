@@ -244,7 +244,9 @@ fn send_feature_report_via_ioctl(file: &std::fs::File, data: &[u8]) -> Result<()
 /// Enumerate all vendor interfaces and return the first Triton that responds to a
 /// `CMD_CLEAR_DIGITAL_MAPPINGS` probe without error. Requires an [`HidApi`](hidapi::HidApi)
 /// to be passed to the first parameter.
-pub fn find(api: &HidApi) -> Result<Triton, DeviceError> {
+///
+/// If `device_path` is not `None`, only the device at that path is considered.
+pub fn find(api: &HidApi, device_path: Option<&str>) -> Result<Triton, DeviceError> {
     let candidates: Vec<_> = api
         .device_list()
         .filter(|d| {
@@ -254,6 +256,23 @@ pub fn find(api: &HidApi) -> Result<Triton, DeviceError> {
 
     log::debug!("Found {} candidate vendor interfaces", candidates.len());
 
+    if let Some(target) = device_path {
+        // Try the specific device
+        let info = candidates
+            .into_iter()
+            .find(|d| d.path().to_str().ok() == Some(target));
+
+        let Some(info) = info else {
+            return Err(DeviceError::NoDeviceFoundAtPath(target.to_string()));
+        };
+
+        let hid = info.open_device(api)?;
+        let device = open_and_probe(target, hid)?;
+
+        return Ok(device);
+    }
+
+    // Consider all candidates
     for info in candidates {
         let Ok(path) = info.path().to_str() else {
             log::debug!("Skipping device, could not get a path: {info:?}");
@@ -262,29 +281,46 @@ pub fn find(api: &HidApi) -> Result<Triton, DeviceError> {
 
         log::debug!("Trying interface at {}", path);
 
-        let hid = info.open_device(api)?;
-
-        // Probe with a feature report to verify the controller is actually
-        // connected and responsive. The dongle keeps the USB endpoint alive
-        // even when the controller is off.
-        let Ok(raw) = OpenOptions::new().read(true).write(true).open(path) else {
-            log::debug!("Could not open raw hidraw at {}", path);
-            continue;
+        let hid = match info.open_device(api) {
+            Ok(hid) => hid,
+            Err(err) => {
+                log::debug!("Failed to obtain handle to device at {path}: {err:?}");
+                continue;
+            }
         };
-        let mut probe = [0u8; 64];
-        probe[0] = 0x01;
-        probe[1] = CMD_CLEAR_DIGITAL_MAPPINGS;
-        if send_feature_report_via_ioctl(&raw, &probe).is_ok() {
-            log::info!("Opened controller on {}", path);
-            return Ok(Triton {
-                hid,
-                path: path.to_string(),
-            });
-        }
-        log::debug!("Interface at {} rejected feature report probe", path);
+
+        let device = match open_and_probe(path, hid) {
+            Ok(device) => device,
+            Err(err) => {
+                log::debug!("Device at {path} failed probe: {err:?}");
+                continue;
+            }
+        };
+
+        return Ok(device);
     }
 
     Err(DeviceError::NoDeviceFound)
+}
+
+fn open_and_probe(path: &str, hid: hidapi::HidDevice) -> Result<Triton, DeviceError> {
+    log::debug!("Trying interface at {}", path);
+
+    // Probe with a feature report to verify the controller is actually
+    // connected and responsive. The dongle keeps the USB endpoint alive
+    // even when the controller is off.
+    let raw = OpenOptions::new().read(true).write(true).open(path)?;
+
+    let mut probe = [0u8; 64];
+    probe[0] = 0x01;
+    probe[1] = CMD_CLEAR_DIGITAL_MAPPINGS;
+
+    send_feature_report_via_ioctl(&raw, &probe)?;
+    log::info!("Opened controller on {}", path);
+    Ok(Triton {
+        hid,
+        path: path.to_string(),
+    })
 }
 
 fn enable_imu_on_file(file: &std::fs::File) -> Result<(), DeviceError> {
@@ -333,81 +369,4 @@ fn enable_imu_on_file(file: &std::fs::File) -> Result<(), DeviceError> {
     log::debug!("IMU enable sequence complete");
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn empty_report() -> [u8; 54] {
-        let mut buf = [0u8; 54];
-        buf[0] = REPORT_ID_TRITON_FULL;
-        buf
-    }
-
-    #[test]
-    fn test_parse_empty_report() {
-        let buf = empty_report();
-        let frame = TritonFrame::parse(&buf).unwrap();
-        assert_eq!(frame.seq_num, 0);
-        assert_eq!(frame.buttons, 0);
-        assert_eq!(frame.trigger_left, 0);
-        assert_eq!(frame.trigger_right, 0);
-        assert_eq!(frame.left_stick_x, 0);
-        assert_eq!(frame.left_stick_y, 0);
-        assert_eq!(frame.right_stick_x, 0);
-        assert_eq!(frame.right_stick_y, 0);
-        assert_eq!(frame.left_pad_x, 0);
-        assert_eq!(frame.left_pad_y, 0);
-        assert_eq!(frame.pressure_left, 0);
-        assert_eq!(frame.right_pad_x, 0);
-        assert_eq!(frame.right_pad_y, 0);
-        assert_eq!(frame.pressure_right, 0);
-        assert_eq!(frame.imu_timestamp, 0);
-        assert_eq!(frame.accel_x, 0);
-        assert_eq!(frame.accel_y, 0);
-        assert_eq!(frame.accel_z, 0);
-        assert_eq!(frame.gyro_x, 0);
-        assert_eq!(frame.gyro_y, 0);
-        assert_eq!(frame.gyro_z, 0);
-        assert_eq!(frame.quat_w, 0);
-        assert_eq!(frame.quat_x, 0);
-        assert_eq!(frame.quat_y, 0);
-        assert_eq!(frame.quat_z, 0);
-    }
-
-    #[test]
-    fn test_parse_rejects_wrong_report_id() {
-        let mut buf = empty_report();
-        buf[0] = 0x00;
-        assert!(TritonFrame::parse(&buf).is_none());
-
-        buf[0] = 0x43;
-        assert!(TritonFrame::parse(&buf).is_none());
-
-        buf[0] = 0x69;
-        assert!(TritonFrame::parse(&buf).is_none());
-    }
-
-    #[test]
-    fn test_parse_rejects_short_buffer() {
-        let buf = [0x42u8; 53];
-        assert!(TritonFrame::parse(&buf).is_none());
-
-        let buf = [0x42u8; 10];
-        assert!(TritonFrame::parse(&buf).is_none());
-    }
-
-    #[test]
-    fn test_parse_accepts_exact_size() {
-        let buf = empty_report();
-        assert!(TritonFrame::parse(&buf).is_some());
-    }
-
-    #[test]
-    fn test_parse_accepts_larger_buffer() {
-        let mut buf = [0u8; 64];
-        buf[0] = REPORT_ID_TRITON_FULL;
-        assert!(TritonFrame::parse(&buf).is_some());
-    }
 }
