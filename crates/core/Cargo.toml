@@ -10,6 +10,5 @@ documentation = "https://github.com/njanke96/steam-controller-dsu"
 
 [dependencies]
 hidapi = "2.6"
-libc = "0.2"
-log = { workspace = true }
 thiserror = "2.0.18"
+log = { workspace = true }

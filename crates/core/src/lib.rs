@@ -4,9 +4,6 @@
 //! input state over a UDP connection to various video game console emulators. The main focus is supporting
 //! the Steam Controller 2026 (Triton).
 
-#[cfg(target_os = "windows")]
-compile_error!("This crate does not support Windows.");
-
 pub mod devices;
 pub mod dsu;
 pub mod errors;
@@ -45,7 +42,7 @@ pub fn run_server(
         }
 
         let Some(device) =
-            open_controller_with_retry(running.clone(), &api, config.device_path.as_deref())
+            open_controller_with_retry(running.clone(), &mut api, config.device_path.as_deref())
         else {
             // Interrupted by signal
             return Ok(());
@@ -109,7 +106,7 @@ pub fn run_debug_dump(
     let api = hidapi::HidApi::new()?;
 
     // If more devices are ever supported, add selection logic
-    let device = devices::triton::find(&api, device_path)?;
+    let device = devices::triton::Triton::find(&api, device_path)?;
 
     log::info!("Controller opened. Running initialization...");
     device.initialize()?;
@@ -204,7 +201,7 @@ pub fn run_debug_dump(
 /// Returns `None` if interrupted.
 fn open_controller_with_retry(
     running: Arc<atomic::AtomicBool>,
-    api: &hidapi::HidApi,
+    api: &mut hidapi::HidApi,
     device_path: Option<&str>,
 ) -> Option<impl devices::Device + use<>> {
     loop {
@@ -213,7 +210,14 @@ fn open_controller_with_retry(
         }
 
         // If more devices are ever supported, add selection logic
-        match devices::triton::find(api, device_path) {
+
+        // Refresh devices in case any were dis/reconnected
+        if let Err(err) = api.refresh_devices() {
+            log::error!("HidApi failed to refresh_devices: {err:?}");
+            return None;
+        }
+
+        match devices::triton::Triton::find(api, device_path) {
             Ok(d) => return Some(d),
             Err(e) => {
                 log::warn!(

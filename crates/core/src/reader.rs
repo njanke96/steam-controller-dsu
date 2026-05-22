@@ -20,6 +20,7 @@ const DISCONNECT_THRESHOLD: usize = 100;
 
 /// Spawn a thread that reads from `device` and sends parsed frames over the returned channel.
 ///
+/// The reader thread will exit when `running` is set to false.
 /// Returns a [`JoinHandle`](std::thread::JoinHandle) and a mpsc Receiver for receiving frame data.
 pub fn spawn_reader(
     running: Arc<atomic::AtomicBool>,
