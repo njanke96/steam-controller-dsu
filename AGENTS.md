@@ -14,11 +14,13 @@ A Rust reimplementation of SteamDeckGyroDSU for the **new 2026 Steam Controller*
 
 ### USB IDs
 - **VID:** `0x28de` (Valve Software)
-- **PID:** `0x1304` (Steam Controller Puck / new Steam Controller)
+- **PIDs:**
+  - `0x1302` — Wired (USB)
+  - `0x1303` — Bluetooth
+  - `0x1304` — Puck / Dongle
 - The dongle exposes **multiple hidraw nodes**; only the vendor interface (`usage_page = 0xFF00`) accepts feature reports.
 
-### Feature Report Quirk
-`hidapi` (both C and Rust bindings) fails to send feature reports to this controller with `EPIPE`. **Direct `ioctl(HIDIOCSFEATURE)` on a separately opened `std::fs::File` works.**
+### Feature Report Format
 
 - **Working format:** 64-byte buffer, Report ID `0x01` in byte 0, command in byte 1.
 - **SDL/Steam Deck format:** 65-byte buffer, Report ID `0x00` — **rejected by this controller.**
