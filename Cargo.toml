@@ -1,6 +1,6 @@
 [package]
 name = "steam-controller-dsu"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2024"
 license = "MIT"
 description = "DSU (CemuHook) server for the Gyro on Steam Controller (2026)"
@@ -10,7 +10,7 @@ documentation = "https://github.com/njanke96/steam-controller-dsu"
 keywords = ["steam", "controller", "cemuhook", "dsu", "hid"]
 
 [dependencies]
-scdsu-core = { path = "crates/core", version = "=0.1.4" }
+scdsu-core = { path = "crates/core", version = "=0.1.5" }
 clap = { version = "4", features = ["derive"] }
 env_logger = "0.11"
 log = { workspace = true }
