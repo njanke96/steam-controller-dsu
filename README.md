@@ -31,9 +31,11 @@ Start a server with the default options:
 steam-controller-dsu
 ```
 
-### Steam launch option
+### Steam launch option example
 
+```bash
 /path/to/steam-controller-dsu & env MANGOHUD=1 %command; pgrep -f steam-controller-dsu | xargs kill
+```
 
 ### Full usage
 
