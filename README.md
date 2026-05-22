@@ -1,16 +1,6 @@
 # steam-controller-dsu
 
-This is a DSU (CemuHook) UDP server, currently supporting the Gyro data of the 2026 Steam Controller on Linux. Windows is not supported at this time.
-
-## Tested Emulators
-
-- Cemu
-  - Quirk: Through Steam input, make sure the controller has no bindings. You need to map controls in Cemu settings through the DSU server,
-    existing bindings can mess up the process.
-- Ryujinx
-- Eden
-- Azahar
-  - Quirk: If the server is stopped while the emulator is running motion controls might not work until the emulator is started.
+This is a DSU (CemuHook) UDP server, currently supporting the Gyro data of the 2026 Steam Controller on Linux. Windows is untested.
 
 ## Install
 
@@ -22,8 +12,8 @@ This is a DSU (CemuHook) UDP server, currently supporting the Gyro data of the 2
 
 ### Manual
 
-1. Ensure you have `libudev` (present on systemd distros)
-2. Download the latest release binary, make sure it's executable, and stick it somewhere in `$PATH`.
+1. Ensure you have `libudev` (it should be already present on systemd distros, it is `eudev-lubudev` on Void)
+2. Download the latest release binary from [here](https://github.com/njanke96/steam-controller-dsu/releases), make sure it's executable, and stick it somewhere in `$PATH`.
 
 ### From source
 
@@ -32,6 +22,20 @@ This is a DSU (CemuHook) UDP server, currently supporting the Gyro data of the 2
 3. Clone and build with `cargo build --release`
 
 ## Usage
+
+### Example
+
+Start a server with the default options:
+
+```
+steam-controller-dsu
+```
+
+### Steam launch option
+
+/path/to/steam-controller-dsu & env MANGOHUD=1 %command; pgrep -f steam-controller-dsu | xargs kill
+
+### Full usage
 
 ```
 Usage: steam-controller-dsu [OPTIONS]
@@ -47,9 +51,18 @@ Options:
   -V, --version                    Print version
 ```
 
+## Tested Emulators
+
+- Cemu
+  - Quirk: Through Steam input, make sure the controller has no bindings. You need to map controls in Cemu settings through the DSU server,
+    existing bindings can mess up the process.
+- Ryujinx
+- Eden
+- Azahar
+  - Quirk: If the server is stopped while the emulator is running motion controls might not work until the emulator is started.
+
 ## Wishlist
 
-- Support Windows
 - Support Steam Input-like configuration options (Gyro deadzone, sensitivity, etc)
 - Support more devices (Steam Deck, 2015 Steam Controller, future Steam Devices, non-Steam devices?)
 
