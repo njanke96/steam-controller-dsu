@@ -74,25 +74,24 @@ where
     D: Device + std::marker::Send + 'static,
 {
     match device.read_frame() {
-        Ok(frame) => {
+        Ok(mut frame) => {
             frame_state.fail_count = 0;
             frame_state.total_frames += 1;
 
-            // Check for frozen/stale IMU data
-            // This is observed behavior when Steam disables the IMU on Steam devices
+            // Check for frozen IMU data
+            // Use the raw data incase values are frozen due to the gyro intentionally
+            // being disabled.
             let is_imu_frozen = frame_state
                 .prev_frame
                 .map(|prev| {
-                    frame.accel_x == prev.accel_x
-                        && frame.accel_y == prev.accel_y
-                        && frame.accel_z == prev.accel_z
-                        && frame.gyro_x == prev.gyro_x
-                        && frame.gyro_y == prev.gyro_y
-                        && frame.gyro_z == prev.gyro_z
+                    frame.raw_accel_x == prev.raw_accel_x
+                        && frame.raw_accel_y == prev.raw_accel_y
+                        && frame.raw_accel_z == prev.raw_accel_z
+                        && frame.raw_gyro_x == prev.raw_gyro_x
+                        && frame.raw_gyro_y == prev.raw_gyro_y
+                        && frame.raw_gyro_z == prev.raw_gyro_z
                 })
                 .unwrap_or(false);
-
-            let mut frame_to_send = frame;
 
             if is_imu_frozen {
                 frame_state.frozen_count += 1;
@@ -121,12 +120,12 @@ where
                 }
 
                 // Zero out motion data so clients don't drift on stale values
-                frame_to_send.accel_x = 0.0;
-                frame_to_send.accel_y = 0.0;
-                frame_to_send.accel_z = 0.0;
-                frame_to_send.gyro_x = 0.0;
-                frame_to_send.gyro_y = 0.0;
-                frame_to_send.gyro_z = 0.0;
+                frame.accel_x = 0.0;
+                frame.accel_y = 0.0;
+                frame.accel_z = 0.0;
+                frame.gyro_x = 0.0;
+                frame.gyro_y = 0.0;
+                frame.gyro_z = 0.0;
             } else {
                 frame_state.frozen_count = 0;
                 frame_state.last_init_attempt = None;
@@ -134,7 +133,7 @@ where
 
             frame_state.prev_frame = Some(frame);
 
-            if tx.send(frame_to_send).is_err() {
+            if tx.send(frame).is_err() {
                 log::debug!("Receiver has hung up, reader thread exiting");
                 return false;
             }

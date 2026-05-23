@@ -37,4 +37,10 @@ pub enum DeviceError {
     /// A device report was invalid
     #[error("Invalid report (first byte: 0x{0:02x})")]
     InvalidReport(u8),
+    /// Invalid device button string
+    #[error("Invalid device button string: {0}")]
+    InvalidDeviceButton(String),
+    /// Invalid gyro activation mode string
+    #[error("Invalid gyro activation mode string: {0}")]
+    InvalidGyroActivationMode(String),
 }

@@ -16,7 +16,12 @@ const VERSION_TYPE: u32 = 0x100000;
 const INFO_TYPE: u32 = 0x100001;
 const DATA_TYPE: u32 = 0x100002;
 
-/// CemuHook server configuration.
+/// DSU server configuration.
+///
+/// Defines configurable behavior within device DSU server.
+///
+/// For configuration affecting the device behavior,
+/// see ['DeviceConfig'](crate::devices::DeviceConfig)
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
     /// Address or host to bind to
