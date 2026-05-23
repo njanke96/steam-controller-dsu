@@ -34,6 +34,7 @@ pub struct DSUFrame {
     pub gyro_x: f32,
     pub gyro_y: f32,
     pub gyro_z: f32,
+    pub gyro_disabled: bool,
 }
 
 /// Write the common CemuHook packet header into `buf`
@@ -322,6 +323,7 @@ mod tests {
             gyro_x: 10.0,
             gyro_y: -5.0,
             gyro_z: 2.5,
+            gyro_disabled: false,
         }
     }
 

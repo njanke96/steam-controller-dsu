@@ -3,11 +3,11 @@
 use hidapi::{HidApi, HidDevice};
 use std::time::Duration;
 
-use crate::devices::DeviceConfig;
-use crate::devices::device::Device;
+use crate::devices::device::{Device, FrameDevice};
 use crate::devices::util::{
     is_u32_masked_button_pressed, scale_stick_to_byte, scale_trigger_to_byte,
 };
+use crate::devices::{DeviceButton, DeviceConfig, GyroActivationMode};
 use crate::dsu::DSUFrame;
 use crate::errors::DeviceError;
 
@@ -79,6 +79,10 @@ const MASK_LEFT_STICK_TOUCH: u32 = 0x0100_0000;
 const MASK_LEFT_PAD_TOUCH: u32 = 0x0200_0000;
 const MASK_RIGHT_GRIP: u32 = 0x1000_0000;
 const MASK_LEFT_GRIP: u32 = 0x2000_0000;
+const MASK_L4: u32 = 0x0002_0000;
+const MASK_L5: u32 = 0x0004_0000;
+const MASK_R4: u32 = 0x0000_0080;
+const MASK_R5: u32 = 0x0000_0100;
 
 const READ_TIMEOUT_MILLIS: i32 = 100;
 
@@ -156,46 +160,6 @@ impl TritonFrame {
             left_grip: (buttons & MASK_LEFT_GRIP) != 0,
             right_grip: (buttons & MASK_RIGHT_GRIP) != 0,
         })
-    }
-}
-
-impl From<TritonFrame> for DSUFrame {
-    fn from(value: TritonFrame) -> Self {
-        let l2 = scale_trigger_to_byte(value.trigger_left as i16);
-        let r2 = scale_trigger_to_byte(value.trigger_right as i16);
-
-        DSUFrame {
-            dpad_left: is_u32_masked_button_pressed(value.buttons, MASK_DPAD_LEFT),
-            dpad_down: is_u32_masked_button_pressed(value.buttons, MASK_DPAD_DOWN),
-            dpad_right: is_u32_masked_button_pressed(value.buttons, MASK_DPAD_RIGHT),
-            dpad_up: is_u32_masked_button_pressed(value.buttons, MASK_DPAD_UP),
-            options: is_u32_masked_button_pressed(value.buttons, MASK_VIEW),
-            r3: is_u32_masked_button_pressed(value.buttons, MASK_R3),
-            l3: is_u32_masked_button_pressed(value.buttons, MASK_L3),
-            share: is_u32_masked_button_pressed(value.buttons, MASK_MENU),
-            y: is_u32_masked_button_pressed(value.buttons, MASK_Y),
-            b: is_u32_masked_button_pressed(value.buttons, MASK_B),
-            a: is_u32_masked_button_pressed(value.buttons, MASK_A),
-            x: is_u32_masked_button_pressed(value.buttons, MASK_X),
-            r1: is_u32_masked_button_pressed(value.buttons, MASK_R),
-            l1: is_u32_masked_button_pressed(value.buttons, MASK_L),
-            r2: r2 >= ANALOG_TRIGGER_TO_DIGITAL_THRESHOLD,
-            l2: l2 >= ANALOG_TRIGGER_TO_DIGITAL_THRESHOLD,
-            home: is_u32_masked_button_pressed(value.buttons, MASK_STEAM),
-            touch: is_u32_masked_button_pressed(value.buttons, MASK_QAM),
-            left_stick_x: scale_stick_to_byte(value.left_stick_x),
-            left_stick_y: scale_stick_to_byte(value.left_stick_y),
-            right_stick_x: scale_stick_to_byte(value.right_stick_x),
-            right_stick_y: scale_stick_to_byte(value.right_stick_y),
-            analog_r2: r2,
-            analog_l2: l2,
-            accel_x: -(value.accel_x as f32 / ACCEL_PER_G),
-            accel_y: -(value.accel_z as f32 / ACCEL_PER_G),
-            accel_z: (value.accel_y as f32 / ACCEL_PER_G),
-            gyro_x: (value.gyro_x as f32 / GYRO_PER_DPS),
-            gyro_y: -(value.gyro_z as f32 / GYRO_PER_DPS),
-            gyro_z: (value.gyro_y as f32 / GYRO_PER_DPS),
-        }
     }
 }
 
@@ -316,9 +280,106 @@ impl Device for Triton {
 
         let frame = TritonFrame::parse(&buf[..n]).ok_or(DeviceError::InvalidReport(buf[0]))?;
 
+        let inputs = &self.config.gyro_activation_inputs;
+        let mut enable_gyro = true;
+
+        // gyro toggling
+        if !inputs.is_empty() {
+            enable_gyro = match self.config.gyro_activation_mode {
+                GyroActivationMode::Any => inputs
+                    .iter()
+                    .any(|button| Self::is_device_button_pressed(button, &frame)),
+
+                GyroActivationMode::All => inputs
+                    .iter()
+                    .all(|button| Self::is_device_button_pressed(button, &frame)),
+            };
+        }
+
         log::trace!("Parsed TritonFrame: {:?}", frame);
 
-        Ok(frame.into())
+        Ok(Self::to_dsu_frame(&frame, !enable_gyro))
+    }
+}
+
+impl FrameDevice<TritonFrame> for Triton {
+    fn to_dsu_frame(frame: &TritonFrame, gyro_disabled: bool) -> DSUFrame {
+        let l2 = scale_trigger_to_byte(frame.trigger_left as i16);
+        let r2 = scale_trigger_to_byte(frame.trigger_right as i16);
+
+        DSUFrame {
+            dpad_left: is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_LEFT),
+            dpad_down: is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_DOWN),
+            dpad_right: is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_RIGHT),
+            dpad_up: is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_UP),
+            options: is_u32_masked_button_pressed(frame.buttons, MASK_VIEW),
+            r3: is_u32_masked_button_pressed(frame.buttons, MASK_R3),
+            l3: is_u32_masked_button_pressed(frame.buttons, MASK_L3),
+            share: is_u32_masked_button_pressed(frame.buttons, MASK_MENU),
+            y: is_u32_masked_button_pressed(frame.buttons, MASK_Y),
+            b: is_u32_masked_button_pressed(frame.buttons, MASK_B),
+            a: is_u32_masked_button_pressed(frame.buttons, MASK_A),
+            x: is_u32_masked_button_pressed(frame.buttons, MASK_X),
+            r1: is_u32_masked_button_pressed(frame.buttons, MASK_R),
+            l1: is_u32_masked_button_pressed(frame.buttons, MASK_L),
+            r2: r2 >= ANALOG_TRIGGER_TO_DIGITAL_THRESHOLD,
+            l2: l2 >= ANALOG_TRIGGER_TO_DIGITAL_THRESHOLD,
+            home: is_u32_masked_button_pressed(frame.buttons, MASK_STEAM),
+            touch: is_u32_masked_button_pressed(frame.buttons, MASK_QAM),
+            left_stick_x: scale_stick_to_byte(frame.left_stick_x),
+            left_stick_y: scale_stick_to_byte(frame.left_stick_y),
+            right_stick_x: scale_stick_to_byte(frame.right_stick_x),
+            right_stick_y: scale_stick_to_byte(frame.right_stick_y),
+            analog_r2: r2,
+            analog_l2: l2,
+            accel_x: -(frame.accel_x as f32 / ACCEL_PER_G),
+            accel_y: -(frame.accel_z as f32 / ACCEL_PER_G),
+            accel_z: (frame.accel_y as f32 / ACCEL_PER_G),
+            gyro_x: (frame.gyro_x as f32 / GYRO_PER_DPS),
+            gyro_y: -(frame.gyro_z as f32 / GYRO_PER_DPS),
+            gyro_z: (frame.gyro_y as f32 / GYRO_PER_DPS),
+            gyro_disabled,
+        }
+    }
+
+    fn is_device_button_pressed(button: &DeviceButton, frame: &TritonFrame) -> bool {
+        match button {
+            DeviceButton::DpadLeft => is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_LEFT),
+            DeviceButton::DpadDown => is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_DOWN),
+            DeviceButton::DpadRight => is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_RIGHT),
+            DeviceButton::DpadUp => is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_UP),
+            DeviceButton::Start => is_u32_masked_button_pressed(frame.buttons, MASK_VIEW),
+            DeviceButton::Select => is_u32_masked_button_pressed(frame.buttons, MASK_MENU),
+            DeviceButton::Guide => is_u32_masked_button_pressed(frame.buttons, MASK_STEAM),
+            DeviceButton::Quaternary => is_u32_masked_button_pressed(frame.buttons, MASK_QAM),
+            DeviceButton::A => is_u32_masked_button_pressed(frame.buttons, MASK_A),
+            DeviceButton::B => is_u32_masked_button_pressed(frame.buttons, MASK_B),
+            DeviceButton::X => is_u32_masked_button_pressed(frame.buttons, MASK_X),
+            DeviceButton::Y => is_u32_masked_button_pressed(frame.buttons, MASK_Y),
+            DeviceButton::L1 => is_u32_masked_button_pressed(frame.buttons, MASK_L),
+            DeviceButton::R1 => is_u32_masked_button_pressed(frame.buttons, MASK_R),
+            DeviceButton::L2 => {
+                scale_trigger_to_byte(frame.trigger_left as i16)
+                    >= ANALOG_TRIGGER_TO_DIGITAL_THRESHOLD
+            }
+            DeviceButton::R2 => {
+                scale_trigger_to_byte(frame.trigger_right as i16)
+                    >= ANALOG_TRIGGER_TO_DIGITAL_THRESHOLD
+            }
+            DeviceButton::L3 => is_u32_masked_button_pressed(frame.buttons, MASK_L3),
+            DeviceButton::R3 => is_u32_masked_button_pressed(frame.buttons, MASK_R3),
+            DeviceButton::L4 => is_u32_masked_button_pressed(frame.buttons, MASK_L4),
+            DeviceButton::L5 => is_u32_masked_button_pressed(frame.buttons, MASK_L5),
+            DeviceButton::R4 => is_u32_masked_button_pressed(frame.buttons, MASK_R4),
+            DeviceButton::R5 => is_u32_masked_button_pressed(frame.buttons, MASK_R5),
+            DeviceButton::LeftStickTouch => frame.left_stick_touch,
+            DeviceButton::RightStickTouch => frame.right_stick_touch,
+            DeviceButton::LeftPadTouch => frame.left_pad_touch,
+            DeviceButton::RightPadTouch => frame.right_pad_touch,
+            DeviceButton::LeftGrip => frame.left_grip,
+            DeviceButton::RightGrip => frame.right_grip,
+            DeviceButton::Unknown => false,
+        }
     }
 }
 

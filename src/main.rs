@@ -1,6 +1,7 @@
 use std::sync::{Arc, atomic};
 
 use clap::Parser;
+use scdsu_core::devices;
 
 #[derive(Parser)]
 #[command(version)]
@@ -17,7 +18,7 @@ pub struct Args {
     #[arg(long, default_value_t = 26760)]
     pub port: u16,
 
-    /// Invert the motion controls pitch axis.
+    /// When set invert the motion controls pitch axis.
     #[arg(long, default_value_t = false)]
     pub invert_pitch: bool,
 
@@ -25,13 +26,33 @@ pub struct Args {
     #[arg(long, default_value_t = 0)]
     pub slot: u8,
 
-    /// Optional specific device path to open. Example: /dev/hidraw11
+    /// Specific device path to open. Example: /dev/hidraw11
     #[arg(long)]
     pub device_path: Option<String>,
 
     /// Don't enable lizard mode when the device is closed (such as on program exit)
     #[arg(short = 'L', long, default_value_t = false)]
     pub no_enable_lizard_mode_on_close: bool,
+
+    /// Comma-separated list of buttons/sensors that activate gyro reporting.
+    ///
+    /// Example value: left_grip,right_grip
+    ///
+    /// Possible values to include in the list: dpad_left, dpad_down, dpad_right, dpad_up, start, select,
+    /// guide, quaternary, a, b, x, y, l1, r1, l2, r2, l3, r3, l4, l5, r4, r5,
+    /// left_stick_touch, right_stick_touch, left_pad_touch, right_pad_touch,
+    /// left_grip, right_grip
+    #[arg(short = 'b', long, value_delimiter = ',')]
+    gyro_activation_buttons: Vec<devices::DeviceButton>,
+
+    /// Gyro activation mode
+    ///
+    /// Possible values: any, all
+    ///
+    /// When any is specified, at least one gyro activation button must be pressed.
+    /// When all is specified, all gyro activation buttons must be pressed.
+    #[arg(long, default_value_t = devices::GyroActivationMode::default())]
+    gyro_activation_mode: devices::GyroActivationMode,
 }
 
 pub fn entrypoint() -> i32 {
@@ -60,6 +81,8 @@ pub fn entrypoint() -> i32 {
 
     let device_config = scdsu_core::devices::DeviceConfig {
         no_enable_lizard_mode_on_close: args.no_enable_lizard_mode_on_close,
+        gyro_activation_inputs: args.gyro_activation_buttons,
+        gyro_activation_mode: args.gyro_activation_mode,
     };
 
     if args.debug {
