@@ -141,7 +141,10 @@ impl Server {
                     log::debug!("UDP recv interrupted");
                 }
                 Err(e) => {
-                    log::error!("UDP recv error: {:?}", e);
+                    // shut up, windows
+                    if e.raw_os_error() != Some(10060) {
+                        log::error!("UDP recv error: {:?}", e);
+                    }
                 }
             }
         }
