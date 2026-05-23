@@ -78,30 +78,20 @@ where
             frame_state.fail_count = 0;
             frame_state.total_frames += 1;
 
-            if frame.gyro_disabled {
-                // intentionally zero-out motion data
-                frame.accel_x = 0.0;
-                frame.accel_y = 0.0;
-                frame.accel_z = 0.0;
-                frame.gyro_x = 0.0;
-                frame.gyro_y = 0.0;
-                frame.gyro_z = 0.0;
-            }
-
-            // Check for frozen/stale IMU data
-            // This is observed behavior when Steam disables the IMU on Steam devices
-            let is_imu_frozen = !frame.gyro_disabled
-                && frame_state
-                    .prev_frame
-                    .map(|prev| {
-                        frame.accel_x == prev.accel_x
-                            && frame.accel_y == prev.accel_y
-                            && frame.accel_z == prev.accel_z
-                            && frame.gyro_x == prev.gyro_x
-                            && frame.gyro_y == prev.gyro_y
-                            && frame.gyro_z == prev.gyro_z
-                    })
-                    .unwrap_or(false);
+            // Check for frozen IMU data
+            // Use the raw data incase values are frozen due to the gyro intentionally
+            // being disabled.
+            let is_imu_frozen = frame_state
+                .prev_frame
+                .map(|prev| {
+                    frame.raw_accel_x == prev.raw_accel_x
+                        && frame.raw_accel_y == prev.raw_accel_y
+                        && frame.raw_accel_z == prev.raw_accel_z
+                        && frame.raw_gyro_x == prev.raw_gyro_x
+                        && frame.raw_gyro_y == prev.raw_gyro_y
+                        && frame.raw_gyro_z == prev.raw_gyro_z
+                })
+                .unwrap_or(false);
 
             if is_imu_frozen {
                 frame_state.frozen_count += 1;

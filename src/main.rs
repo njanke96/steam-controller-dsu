@@ -44,6 +44,8 @@ pub struct CliArguments {
 struct GyroOptions {
     /// Comma-separated list of buttons/sensors that activate gyro reporting.
     ///
+    /// Depending on the emulated game, turning the gyro on/off might not work how you expect!
+    ///
     /// Example value: left_grip,right_grip
     ///
     /// Possible values to include in the list: dpad_left, dpad_down, dpad_right, dpad_up, start, select,

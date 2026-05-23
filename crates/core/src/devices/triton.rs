@@ -319,6 +319,10 @@ impl FrameDevice<TritonFrame> for Triton {
             }
         };
 
+        let zero_on_gyro_disabled = |v: f32| {
+            if gyro_disabled { 0.0 } else { v }
+        };
+
         DSUFrame {
             dpad_left: is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_LEFT),
             dpad_down: is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_DOWN),
@@ -344,13 +348,20 @@ impl FrameDevice<TritonFrame> for Triton {
             right_stick_y: scale_stick_to_byte(frame.right_stick_y),
             analog_r2: r2,
             analog_l2: l2,
-            accel_x: -(frame.accel_x as f32 / ACCEL_PER_G),
-            accel_y: -(frame.accel_z as f32 / ACCEL_PER_G),
-            accel_z: (frame.accel_y as f32 / ACCEL_PER_G),
-            gyro_x: apply_deadzone(gyro_x_dps) * self.config.gyro_pitch_scale,
-            gyro_y: apply_deadzone(gyro_y_dps) * self.config.gyro_yaw_scale,
-            gyro_z: apply_deadzone(gyro_z_dps) * self.config.gyro_roll_scale,
-            gyro_disabled,
+            raw_accel_x: frame.accel_x as f32,
+            raw_accel_y: frame.accel_y as f32,
+            raw_accel_z: frame.accel_z as f32,
+            raw_gyro_x: frame.gyro_x as f32,
+            raw_gyro_y: frame.gyro_y as f32,
+            raw_gyro_z: frame.gyro_z as f32,
+            accel_x: zero_on_gyro_disabled(-(frame.accel_x as f32 / ACCEL_PER_G)),
+            accel_y: zero_on_gyro_disabled(-(frame.accel_z as f32 / ACCEL_PER_G)),
+            accel_z: zero_on_gyro_disabled(frame.accel_y as f32 / ACCEL_PER_G),
+            gyro_x: zero_on_gyro_disabled(
+                apply_deadzone(gyro_x_dps) * self.config.gyro_pitch_scale,
+            ),
+            gyro_y: zero_on_gyro_disabled(apply_deadzone(gyro_y_dps) * self.config.gyro_yaw_scale),
+            gyro_z: zero_on_gyro_disabled(apply_deadzone(gyro_z_dps) * self.config.gyro_roll_scale),
         }
     }
 
