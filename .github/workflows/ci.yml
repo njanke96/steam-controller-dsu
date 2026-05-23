@@ -21,8 +21,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
-        job: [fmt, clippy, test, build]
+        os: [ubuntu-latest, windows-latest]
+        job: [test, build]
+        include:
+          - os: ubuntu-latest
+            job: fmt
+          - os: ubuntu-latest
+            job: clippy
 
     steps:
       - name: Checkout
@@ -34,6 +39,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Install native dependencies
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
 
       - name: Check formatting
