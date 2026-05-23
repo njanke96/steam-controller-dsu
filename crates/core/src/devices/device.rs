@@ -9,3 +9,10 @@ pub trait Device {
     /// Read a DSU frame from the device.
     fn read_frame(&self) -> Result<DSUFrame, DeviceError>;
 }
+
+/// Common device configurations
+#[derive(Default, Debug, Clone)]
+pub struct DeviceConfig {
+    /// Don't enable lizard mode when the device is dropped.
+    pub no_enable_lizard_mode_on_close: bool,
+}

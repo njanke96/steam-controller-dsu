@@ -9,3 +9,4 @@ pub(crate) mod util;
 mod device;
 
 pub use device::Device;
+pub use device::DeviceConfig;

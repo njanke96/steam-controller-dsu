@@ -17,7 +17,7 @@ pub struct Args {
     #[arg(long, default_value_t = 26760)]
     pub port: u16,
 
-    /// Invert the pitch axis
+    /// Invert the motion controls pitch axis.
     #[arg(long, default_value_t = false)]
     pub invert_pitch: bool,
 
@@ -25,9 +25,13 @@ pub struct Args {
     #[arg(long, default_value_t = 0)]
     pub slot: u8,
 
-    /// Specific device path to open. Example: /dev/hidraw11
+    /// Optional specific device path to open. Example: /dev/hidraw11
     #[arg(long)]
     pub device_path: Option<String>,
+
+    /// Don't enable lizard mode when the device is closed (such as on program exit)
+    #[arg(short = 'L', long, default_value_t = false)]
+    pub no_enable_lizard_mode_on_close: bool,
 }
 
 pub fn entrypoint() -> i32 {
@@ -54,8 +58,14 @@ pub fn entrypoint() -> i32 {
         return 1;
     }
 
+    let device_config = scdsu_core::devices::DeviceConfig {
+        no_enable_lizard_mode_on_close: args.no_enable_lizard_mode_on_close,
+    };
+
     if args.debug {
-        if let Err(err) = scdsu_core::run_debug_dump(running, args.device_path.as_deref()) {
+        if let Err(err) =
+            scdsu_core::run_debug_dump(running, args.device_path.as_deref(), Some(device_config))
+        {
             log::error!("Error from run_debug_dump: {err}");
         }
         return 1;
@@ -71,7 +81,7 @@ pub fn entrypoint() -> i32 {
 
     log::debug!("Server configuration from cli args: {config:?}");
 
-    if let Err(err) = scdsu_core::run_server(running, config) {
+    if let Err(err) = scdsu_core::run_server(running, config, device_config) {
         log::error!("Error from run_server: {err}");
         return 1;
     }
