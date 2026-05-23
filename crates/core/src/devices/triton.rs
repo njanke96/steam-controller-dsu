@@ -3,6 +3,7 @@
 use hidapi::{HidApi, HidDevice};
 use std::time::Duration;
 
+use crate::devices::DeviceConfig;
 use crate::devices::device::Device;
 use crate::devices::util::{
     is_u32_masked_button_pressed, scale_stick_to_byte, scale_trigger_to_byte,
@@ -31,6 +32,7 @@ const SETTING_IMU_MODE: u8 = 48;
 
 /// Setting values
 const LIZARD_MODE_OFF: u16 = 0;
+const LIZARD_MODE_ON: u16 = 1;
 const IMU_MODE_SEND_RAW_ACCEL: u16 = 0x08;
 const IMU_MODE_SEND_RAW_GYRO: u16 = 0x10;
 const IMU_MODE_GYRO_ACCEL: u16 = IMU_MODE_SEND_RAW_ACCEL | IMU_MODE_SEND_RAW_GYRO;
@@ -176,7 +178,6 @@ impl From<TritonFrame> for DSUFrame {
     }
 }
 
-/// Connection mode determines the protocol used for feature reports.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ConnectionMode {
     Usb,
@@ -186,14 +187,20 @@ pub enum ConnectionMode {
 
 /// Triton (Steam Controller 2026) device
 pub struct Triton {
+    config: DeviceConfig,
     hid: HidDevice,
 }
 
 impl Triton {
     /// Enumerate all vendor interfaces and return the first Triton found.
     ///
+    /// The created Triton will use `config` as its ['DeviceConfiguration'](crate::devices::DeviceConfiguration).
     /// Requires passing an `api` ([`HidApi`](hidapi::HidApi)) and optionally a specific `device_path`
-    pub fn find(api: &HidApi, device_path: Option<&str>) -> Result<Self, DeviceError> {
+    pub fn find(
+        config: DeviceConfig,
+        api: &HidApi,
+        device_path: Option<&str>,
+    ) -> Result<Self, DeviceError> {
         let candidates: Vec<_> = api
             .device_list()
             .filter(|d| {
@@ -229,7 +236,7 @@ impl Triton {
             probe_device(&hid)?;
 
             log::info!("Opened controller on {} ({:?})", target, mode);
-            return Ok(Triton { hid });
+            return Ok(Triton { config, hid });
         }
 
         for info in candidates {
@@ -257,7 +264,7 @@ impl Triton {
             }
 
             log::info!("Opened controller on {} ({:?})", path, mode);
-            return Ok(Triton { hid });
+            return Ok(Triton { config, hid });
         }
 
         Err(DeviceError::NoDeviceFound)
@@ -294,8 +301,10 @@ impl Device for Triton {
 
 impl Drop for Triton {
     fn drop(&mut self) {
-        if send_setting(&self.hid, SETTING_LIZARD_MODE, LIZARD_MODE_OFF).is_ok() {
-            log::debug!("Cleanup complete");
+        if !self.config.no_enable_lizard_mode_on_close
+            && send_setting(&self.hid, SETTING_LIZARD_MODE, LIZARD_MODE_ON).is_ok()
+        {
+            log::debug!("Re-enabled lizard mode");
         }
     }
 }

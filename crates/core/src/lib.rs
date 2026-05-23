@@ -26,9 +26,13 @@ const CONTROLLER_OPEN_RETRY_DELAY_SEC: u64 = 5;
 ///
 /// Accepts an [`AtomicBool`](std::sync::atomic::AtomicBool) within an `Arc<>` for signaling when
 /// the server should shut down (set to `false`).
+///
+/// Accepts `config` and `device_config` for specifying ['ServerConfig'](server::ServerConfig) and
+/// ['DeviceConfig'](devices::DeviceConfig).
 pub fn run_server(
     running: Arc<atomic::AtomicBool>,
     config: server::ServerConfig,
+    device_config: devices::DeviceConfig,
 ) -> Result<(), ServerError> {
     let mut api = hidapi::HidApi::new()?;
 
@@ -41,9 +45,12 @@ pub fn run_server(
             log::warn!("Failed to refresh HID device list: {e}");
         }
 
-        let Some(device) =
-            open_controller_with_retry(running.clone(), &mut api, config.device_path.as_deref())
-        else {
+        let Some(device) = open_controller_with_retry(
+            running.clone(),
+            &mut api,
+            device_config.clone(),
+            config.device_path.as_deref(),
+        ) else {
             // Interrupted by signal
             return Ok(());
         };
@@ -98,15 +105,17 @@ pub fn run_server(
 /// [`run_server`], it runs until `running` is false.
 ///
 /// Accepts an [`AtomicBool`](std::sync::atomic::AtomicBool) within an `Arc<>` for signaling when
-/// the server should shut down.
+/// the server should shut down. Optionally accepts a `device_path` and `device_config`.
 pub fn run_debug_dump(
     running: Arc<atomic::AtomicBool>,
     device_path: Option<&str>,
+    device_config: Option<devices::DeviceConfig>,
 ) -> Result<(), DeviceError> {
     let api = hidapi::HidApi::new()?;
+    let device_config = device_config.unwrap_or_default();
 
     // If more devices are ever supported, add selection logic
-    let device = devices::triton::Triton::find(&api, device_path)?;
+    let device = devices::triton::Triton::find(device_config, &api, device_path)?;
 
     log::info!("Controller opened. Running initialization...");
     device.initialize()?;
@@ -202,6 +211,7 @@ pub fn run_debug_dump(
 fn open_controller_with_retry(
     running: Arc<atomic::AtomicBool>,
     api: &mut hidapi::HidApi,
+    device_config: devices::DeviceConfig,
     device_path: Option<&str>,
 ) -> Option<impl devices::Device + use<>> {
     loop {
@@ -217,7 +227,7 @@ fn open_controller_with_retry(
             return None;
         }
 
-        match devices::triton::Triton::find(api, device_path) {
+        match devices::triton::Triton::find(device_config.clone(), api, device_path) {
             Ok(d) => return Some(d),
             Err(e) => {
                 log::warn!(
