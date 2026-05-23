@@ -12,7 +12,7 @@ This is a DSU (CemuHook) UDP server, currently supporting the Gyro data of the 2
 
 ### Manual
 
-1. Ensure you have `libudev` (it should be already present on systemd distros, it is `eudev-lubudev` on Void)
+1. Ensure you have `libudev` (it should be already present on systemd distros, it is `eudev-libudev` on Void)
 2. Download the latest release binary from [here](https://github.com/njanke96/steam-controller-dsu/releases), make sure it's executable, and stick it somewhere in `$PATH`.
 
 ### From source
