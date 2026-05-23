@@ -1,5 +1,8 @@
 # steam-controller-dsu
 
+![Crates.io Version](https://img.shields.io/crates/v/steam-controller-dsu)
+![Crates.io License](https://img.shields.io/crates/l/steam-controller-dsu)
+
 This is a DSU (CemuHook) UDP server, currently supporting the Gyro data of the 2026 Steam Controller on Linux. Windows should work, but is not the main focus.
 
 ## Install
