@@ -34,7 +34,7 @@ steam-controller-dsu
 ### Steam launch option example
 
 ```bash
-/path/to/steam-controller-dsu & env MANGOHUD=1 %command; pgrep -f steam-controller-dsu | xargs kill
+/path/to/steam-controller-dsu -L & env MANGOHUD=1 %command; pgrep -f steam-controller-dsu | xargs kill
 ```
 
 ### Full usage
@@ -43,14 +43,15 @@ steam-controller-dsu
 Usage: steam-controller-dsu [OPTIONS]
 
 Options:
-      --debug                      Run in debug mode: open the controller and dump raw IMU frames
-      --bind-addr <BIND_ADDR>      UDP bind address for the CemuHook server [default: 0.0.0.0]
-      --port <PORT>                UDP port for the CemuHook server [default: 26760]
-      --invert-pitch               Invert the pitch axis
-      --slot <SLOT>                CemuHook controller slot to report on (0-3 for Controllers 1 through 4). Controller number is slot + 1 [default: 0]
-      --device-path <DEVICE_PATH>  Specific device path to open. Example: /dev/hidraw11
-  -h, --help                       Print help
-  -V, --version                    Print version
+      --debug                           Run in debug mode: open the controller and dump raw IMU frames
+      --bind-addr <BIND_ADDR>           UDP bind address for the CemuHook server [default: 0.0.0.0]
+      --port <PORT>                     UDP port for the CemuHook server [default: 26760]
+      --invert-pitch                    Invert the pitch axis
+      --slot <SLOT>                     CemuHook controller slot to report on (0-3 for Controllers 1 through 4). Controller number is slot + 1 [default: 0]
+      --device-path <DEVICE_PATH>       Optional specific device path to open. Example: /dev/hidraw11
+  -L, --no-enable-lizard-mode-on-close  Don't enable lizard mode when the device is closed (such as on program exit)
+  -h, --help                            Print help
+  -V, --version                         Print version
 ```
 
 ## Tested Emulators
