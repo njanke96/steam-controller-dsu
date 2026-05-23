@@ -302,9 +302,10 @@ impl Device for Triton {
 impl Drop for Triton {
     fn drop(&mut self) {
         if !self.config.no_enable_lizard_mode_on_close
-            && send_setting(&self.hid, SETTING_LIZARD_MODE, LIZARD_MODE_ON).is_ok() {
-                log::debug!("Re-enabled lizard mode");
-            }
+            && send_setting(&self.hid, SETTING_LIZARD_MODE, LIZARD_MODE_ON).is_ok()
+        {
+            log::debug!("Re-enabled lizard mode");
+        }
     }
 }
 
