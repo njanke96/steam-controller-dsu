@@ -1,11 +1,11 @@
 use std::sync::{Arc, atomic};
 
-use clap::Parser;
+use clap::{Args, Parser};
 use scdsu_core::devices;
 
 #[derive(Parser)]
 #[command(version)]
-pub struct Args {
+pub struct CliArguments {
     /// Run in debug mode: open the controller and dump raw IMU frames.
     #[arg(long, default_value_t = false)]
     pub debug: bool,
@@ -34,6 +34,14 @@ pub struct Args {
     #[arg(short = 'L', long, default_value_t = false)]
     pub no_enable_lizard_mode_on_close: bool,
 
+    #[command(flatten)]
+    gyro_opts: GyroOptions,
+}
+
+#[derive(Args)]
+#[group(required = false, multiple = true)]
+#[command(next_help_heading = "Gyro Options")]
+struct GyroOptions {
     /// Comma-separated list of buttons/sensors that activate gyro reporting.
     ///
     /// Example value: left_grip,right_grip
@@ -88,7 +96,7 @@ pub fn entrypoint() -> i32 {
         return 1;
     };
 
-    let args = Args::parse();
+    let args = CliArguments::parse();
 
     if args.slot > 3 {
         log::error!("Invalid slot: {}. Slot must be between 0 and 3.", args.slot);
@@ -97,12 +105,12 @@ pub fn entrypoint() -> i32 {
 
     let device_config = scdsu_core::devices::DeviceConfig {
         no_enable_lizard_mode_on_close: args.no_enable_lizard_mode_on_close,
-        gyro_activation_inputs: args.gyro_activation_buttons,
-        gyro_activation_mode: args.gyro_activation_mode,
-        gyro_deadzone: args.gyro_deadzone,
-        gyro_pitch_scale: args.gyro_pitch_scale,
-        gyro_yaw_scale: args.gyro_yaw_scale,
-        gyro_roll_scale: args.gyro_roll_scale,
+        gyro_activation_inputs: args.gyro_opts.gyro_activation_buttons,
+        gyro_activation_mode: args.gyro_opts.gyro_activation_mode,
+        gyro_deadzone: args.gyro_opts.gyro_deadzone,
+        gyro_pitch_scale: args.gyro_opts.gyro_pitch_scale,
+        gyro_yaw_scale: args.gyro_opts.gyro_yaw_scale,
+        gyro_roll_scale: args.gyro_opts.gyro_roll_scale,
     };
 
     if args.debug {
