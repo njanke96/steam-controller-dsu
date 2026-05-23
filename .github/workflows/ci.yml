@@ -9,6 +9,10 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   ci:
     name: ${{ matrix.job }} (${{ matrix.os }})
@@ -17,8 +21,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
-        job: [fmt, clippy, test, build]
+        os: [ubuntu-latest, windows-latest]
+        job: [test, build]
+        include:
+          - os: ubuntu-latest
+            job: fmt
+          - os: ubuntu-latest
+            job: clippy
 
     steps:
       - name: Checkout
@@ -30,6 +39,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Install native dependencies
+        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libudev-dev
 
       - name: Check formatting
@@ -38,13 +48,13 @@ jobs:
 
       - name: Clippy
         if: matrix.job == 'clippy'
-        run: cargo clippy --all-targets --all-features
+        run: cargo clippy --locked --all-targets --all-features
 
       - name: Run tests
         if: matrix.job == 'test'
-        run: cargo test --workspace --all-features
+        run: cargo test --locked --workspace --all-features
 
       - name: Release build
         if: matrix.job == 'build'
-        run: cargo build --release --all-features
+        run: cargo build --locked --release --all-features
 
