@@ -1,6 +1,6 @@
 # steam-controller-dsu
 
-This is a DSU (CemuHook) UDP server, currently supporting the Gyro data of the 2026 Steam Controller on Linux. Windows is untested.
+This is a DSU (CemuHook) UDP server, currently supporting the Gyro data of the 2026 Steam Controller on Linux. Windows should work, but is not the main focus.
 
 ## Install
 
