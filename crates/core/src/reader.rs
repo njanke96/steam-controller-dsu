@@ -121,6 +121,7 @@ where
                 }
 
                 // Zero out motion data so clients don't drift on stale values
+                // TODO: should accel actuall be zeroed here? What about gravity?
                 frame_to_send.accel_x = 0.0;
                 frame_to_send.accel_y = 0.0;
                 frame_to_send.accel_z = 0.0;

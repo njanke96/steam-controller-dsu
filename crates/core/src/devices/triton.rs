@@ -73,6 +73,12 @@ const MASK_MENU: u32 = 0x0000_4000;
 const MASK_L3: u32 = 0x0000_8000;
 const MASK_STEAM: u32 = 0x0001_0000;
 const MASK_L: u32 = 0x0008_0000;
+const MASK_RIGHT_STICK_TOUCH: u32 = 0x0010_0000;
+const MASK_RIGHT_PAD_TOUCH: u32 = 0x0020_0000;
+const MASK_LEFT_STICK_TOUCH: u32 = 0x0100_0000;
+const MASK_LEFT_PAD_TOUCH: u32 = 0x0200_0000;
+const MASK_RIGHT_GRIP: u32 = 0x1000_0000;
+const MASK_LEFT_GRIP: u32 = 0x2000_0000;
 
 const READ_TIMEOUT_MILLIS: i32 = 100;
 
@@ -93,6 +99,14 @@ pub struct TritonFrame {
     pub gyro_x: i16,
     pub gyro_y: i16,
     pub gyro_z: i16,
+
+    // the remaining are not for DSU, only for gyro toggle support.
+    pub left_stick_touch: bool,
+    pub right_stick_touch: bool,
+    pub left_pad_touch: bool,
+    pub right_pad_touch: bool,
+    pub left_grip: bool,
+    pub right_grip: bool,
 }
 
 impl TritonFrame {
@@ -113,9 +127,10 @@ impl TritonFrame {
         }
 
         let p = &data[1..];
+        let buttons = u32::from_le_bytes([p[1], p[2], p[3], p[4]]);
 
         Some(Self {
-            buttons: u32::from_le_bytes([p[1], p[2], p[3], p[4]]),
+            buttons,
             trigger_left: u16::from_le_bytes([p[5], p[6]]),
             trigger_right: u16::from_le_bytes([p[7], p[8]]),
             left_stick_x: i16::from_le_bytes([p[9], p[10]]),
@@ -134,6 +149,12 @@ impl TritonFrame {
             gyro_x: i16::from_le_bytes([p[IMU_OFFSET_GYRO_X], p[IMU_OFFSET_GYRO_X + 1]]),
             gyro_y: i16::from_le_bytes([p[IMU_OFFSET_GYRO_Y], p[IMU_OFFSET_GYRO_Y + 1]]),
             gyro_z: i16::from_le_bytes([p[IMU_OFFSET_GYRO_Z], p[IMU_OFFSET_GYRO_Z + 1]]),
+            left_stick_touch: (buttons & MASK_LEFT_STICK_TOUCH) != 0,
+            right_stick_touch: (buttons & MASK_RIGHT_STICK_TOUCH) != 0,
+            left_pad_touch: (buttons & MASK_LEFT_PAD_TOUCH) != 0,
+            right_pad_touch: (buttons & MASK_RIGHT_PAD_TOUCH) != 0,
+            left_grip: (buttons & MASK_LEFT_GRIP) != 0,
+            right_grip: (buttons & MASK_RIGHT_GRIP) != 0,
         })
     }
 }
@@ -294,6 +315,8 @@ impl Device for Triton {
         }
 
         let frame = TritonFrame::parse(&buf[..n]).ok_or(DeviceError::InvalidReport(buf[0]))?;
+
+        log::trace!("Parsed TritonFrame: {:?}", frame);
 
         Ok(frame.into())
     }
