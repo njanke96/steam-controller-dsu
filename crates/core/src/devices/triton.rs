@@ -31,6 +31,7 @@ const SETTING_IMU_MODE: u8 = 48;
 
 /// Setting values
 const LIZARD_MODE_OFF: u16 = 0;
+const LIZARD_MODE_ON: u16 = 1;
 const IMU_MODE_SEND_RAW_ACCEL: u16 = 0x08;
 const IMU_MODE_SEND_RAW_GYRO: u16 = 0x10;
 const IMU_MODE_GYRO_ACCEL: u16 = IMU_MODE_SEND_RAW_ACCEL | IMU_MODE_SEND_RAW_GYRO;
@@ -176,7 +177,6 @@ impl From<TritonFrame> for DSUFrame {
     }
 }
 
-/// Connection mode determines the protocol used for feature reports.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ConnectionMode {
     Usb,
@@ -294,7 +294,7 @@ impl Device for Triton {
 
 impl Drop for Triton {
     fn drop(&mut self) {
-        if send_setting(&self.hid, SETTING_LIZARD_MODE, LIZARD_MODE_OFF).is_ok() {
+        if send_setting(&self.hid, SETTING_LIZARD_MODE, LIZARD_MODE_ON).is_ok() {
             log::debug!("Cleanup complete");
         }
     }
