@@ -366,7 +366,7 @@ checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 
 [[package]]
 name = "scdsu-core"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
  "hidapi",
  "log",
@@ -401,7 +401,7 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
 name = "steam-controller-dsu"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
  "clap",
  "ctrlc",

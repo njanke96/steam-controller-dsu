@@ -46,11 +46,6 @@ steam-controller-dsu -b left_grip,right_grip --gyro-activation-mode all --gyro-d
 ### Full usage
 
 ```
-   Compiling steam-controller-dsu v0.1.5 (/home/nathan/repos/steam-controller-dsu)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.14s
-     Running `target/debug/steam-controller-dsu --help`
-Usage: steam-controller-dsu [OPTIONS]
-
 Options:
       --debug
           Run in debug mode: open the controller and dump raw IMU frames
