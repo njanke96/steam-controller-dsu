@@ -288,24 +288,36 @@ impl Device for Triton {
             enable_gyro = match self.config.gyro_activation_mode {
                 GyroActivationMode::Any => inputs
                     .iter()
-                    .any(|button| Self::is_device_button_pressed(button, &frame)),
+                    .any(|button| self.is_device_button_pressed(button, &frame)),
 
                 GyroActivationMode::All => inputs
                     .iter()
-                    .all(|button| Self::is_device_button_pressed(button, &frame)),
+                    .all(|button| self.is_device_button_pressed(button, &frame)),
             };
         }
 
         log::trace!("Parsed TritonFrame: {:?}", frame);
 
-        Ok(Self::to_dsu_frame(&frame, !enable_gyro))
+        Ok(self.to_dsu_frame(&frame, !enable_gyro))
     }
 }
 
 impl FrameDevice<TritonFrame> for Triton {
-    fn to_dsu_frame(frame: &TritonFrame, gyro_disabled: bool) -> DSUFrame {
+    fn to_dsu_frame(&self, frame: &TritonFrame, gyro_disabled: bool) -> DSUFrame {
         let l2 = scale_trigger_to_byte(frame.trigger_left as i16);
         let r2 = scale_trigger_to_byte(frame.trigger_right as i16);
+
+        let gyro_x_dps = frame.gyro_x as f32 / GYRO_PER_DPS;
+        let gyro_y_dps = -(frame.gyro_z as f32 / GYRO_PER_DPS);
+        let gyro_z_dps = frame.gyro_y as f32 / GYRO_PER_DPS;
+
+        let apply_deadzone = |v: f32| {
+            if v.abs() < self.config.gyro_deadzone {
+                0.0
+            } else {
+                v
+            }
+        };
 
         DSUFrame {
             dpad_left: is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_LEFT),
@@ -335,14 +347,14 @@ impl FrameDevice<TritonFrame> for Triton {
             accel_x: -(frame.accel_x as f32 / ACCEL_PER_G),
             accel_y: -(frame.accel_z as f32 / ACCEL_PER_G),
             accel_z: (frame.accel_y as f32 / ACCEL_PER_G),
-            gyro_x: (frame.gyro_x as f32 / GYRO_PER_DPS),
-            gyro_y: -(frame.gyro_z as f32 / GYRO_PER_DPS),
-            gyro_z: (frame.gyro_y as f32 / GYRO_PER_DPS),
+            gyro_x: apply_deadzone(gyro_x_dps) * self.config.gyro_pitch_scale,
+            gyro_y: apply_deadzone(gyro_y_dps) * self.config.gyro_yaw_scale,
+            gyro_z: apply_deadzone(gyro_z_dps) * self.config.gyro_roll_scale,
             gyro_disabled,
         }
     }
 
-    fn is_device_button_pressed(button: &DeviceButton, frame: &TritonFrame) -> bool {
+    fn is_device_button_pressed(&self, button: &DeviceButton, frame: &TritonFrame) -> bool {
         match button {
             DeviceButton::DpadLeft => is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_LEFT),
             DeviceButton::DpadDown => is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_DOWN),
@@ -393,7 +405,7 @@ impl Drop for Triton {
     }
 }
 
-/// Send a single setting value using hidapi (for Usb/Bluetooth connections).
+/// Send a single setting value using hidapi.
 fn send_setting(hid: &HidDevice, setting: u8, value: u16) -> Result<(), DeviceError> {
     let mut buf = [0u8; FEATURE_REPORT_SIZE];
     buf[0] = FEATURE_REPORT_ID;

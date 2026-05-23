@@ -14,9 +14,9 @@ pub trait Device {
 
 /// A trait defining shared behavior dependant on the frame type `F` between compatible devices.
 pub trait FrameDevice<F> {
-    fn to_dsu_frame(frame: &F, gyro_disabled: bool) -> DSUFrame;
+    fn to_dsu_frame(&self, frame: &F, gyro_disabled: bool) -> DSUFrame;
     /// Test if a [`DeviceButton`](crate::devices::DeviceButton) is pressed.
-    fn is_device_button_pressed(button: &DeviceButton, frame: &F) -> bool;
+    fn is_device_button_pressed(&self, button: &DeviceButton, frame: &F) -> bool;
 }
 
 /// Device buttons not specific to any one device.
@@ -195,7 +195,7 @@ impl std::fmt::Display for GyroActivationMode {
 ///
 /// For configuration affecting the behavior of the DSU server,
 /// see ['ServerConfig'](crate::server::ServerConfig)
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct DeviceConfig {
     /// Don't enable lizard mode when the device is dropped (Triton)
     pub no_enable_lizard_mode_on_close: bool,
@@ -203,4 +203,26 @@ pub struct DeviceConfig {
     pub gyro_activation_inputs: Vec<DeviceButton>,
     /// See ['GyroActivationMode'](crate::devices::GyroActivationMode)
     pub gyro_activation_mode: GyroActivationMode,
+    /// Gyro deadzone in degrees per second. Values below this threshold are reported as zero.
+    pub gyro_deadzone: f32,
+    /// Scale factor applied to the pitch gyro axis.
+    pub gyro_pitch_scale: f32,
+    /// Scale factor applied to the yaw gyro axis.
+    pub gyro_yaw_scale: f32,
+    /// Scale factor applied to the roll gyro axis.
+    pub gyro_roll_scale: f32,
+}
+
+impl Default for DeviceConfig {
+    fn default() -> Self {
+        Self {
+            no_enable_lizard_mode_on_close: false,
+            gyro_activation_inputs: Vec::new(),
+            gyro_activation_mode: GyroActivationMode::default(),
+            gyro_deadzone: 0.0,
+            gyro_pitch_scale: 1.0,
+            gyro_yaw_scale: 1.0,
+            gyro_roll_scale: 1.0,
+        }
+    }
 }

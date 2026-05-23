@@ -53,6 +53,22 @@ pub struct Args {
     /// When all is specified, all gyro activation buttons must be pressed.
     #[arg(long, default_value_t = devices::GyroActivationMode::default())]
     gyro_activation_mode: devices::GyroActivationMode,
+
+    /// Gyro deadzone in degrees per second. Values below this threshold are reported as zero.
+    #[arg(long, default_value_t = 0.0)]
+    gyro_deadzone: f32,
+
+    /// Scale factor for the pitch gyro axis.
+    #[arg(long, default_value_t = 1.0)]
+    gyro_pitch_scale: f32,
+
+    /// Scale factor for the yaw gyro axis.
+    #[arg(long, default_value_t = 1.0)]
+    gyro_yaw_scale: f32,
+
+    /// Scale factor for the roll gyro axis.
+    #[arg(long, default_value_t = 1.0)]
+    gyro_roll_scale: f32,
 }
 
 pub fn entrypoint() -> i32 {
@@ -83,6 +99,10 @@ pub fn entrypoint() -> i32 {
         no_enable_lizard_mode_on_close: args.no_enable_lizard_mode_on_close,
         gyro_activation_inputs: args.gyro_activation_buttons,
         gyro_activation_mode: args.gyro_activation_mode,
+        gyro_deadzone: args.gyro_deadzone,
+        gyro_pitch_scale: args.gyro_pitch_scale,
+        gyro_yaw_scale: args.gyro_yaw_scale,
+        gyro_roll_scale: args.gyro_roll_scale,
     };
 
     if args.debug {
