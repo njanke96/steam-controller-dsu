@@ -197,7 +197,7 @@ impl std::fmt::Display for GyroActivationMode {
 /// see ['ServerConfig'](crate::server::ServerConfig)
 #[derive(Debug, Clone)]
 pub struct DeviceConfig {
-    /// Don't enable lizard mode when the device is dropped (Triton)
+    /// Don't enable lizard mode when the device is dropped.
     pub no_enable_lizard_mode_on_close: bool,
     /// Inputs that must be pressed to send gyro data through the DSU server.
     pub gyro_activation_inputs: Vec<DeviceButton>,

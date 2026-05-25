@@ -2,7 +2,7 @@
 //!
 //! This library crate provides the ability to run CemuHook (DSU) server which supplies controller
 //! input state over a UDP connection to various video game console emulators. The main focus is supporting
-//! the Steam Controller 2026 (Triton).
+//! Valve Steam Controller families.
 
 pub mod devices;
 pub mod dsu;
@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::sync::atomic;
 use std::time::Duration;
 
-use crate::devices::Device;
+use crate::devices::{Device, DeviceFamily};
 use crate::errors::{DeviceError, ServerError};
 
 pub(crate) const READ_ATOMIC_BOOL_ORDERING: atomic::Ordering = atomic::Ordering::Relaxed;
@@ -34,6 +34,16 @@ pub fn run_server(
     config: server::ServerConfig,
     device_config: devices::DeviceConfig,
 ) -> Result<(), ServerError> {
+    run_server_for_family(running, config, device_config, None)
+}
+
+/// Run the server loop until `running` is `false` for a specific controller family.
+pub fn run_server_for_family(
+    running: Arc<atomic::AtomicBool>,
+    config: server::ServerConfig,
+    device_config: devices::DeviceConfig,
+    family: Option<DeviceFamily>,
+) -> Result<(), ServerError> {
     let mut api = hidapi::HidApi::new()?;
 
     loop {
@@ -50,6 +60,7 @@ pub fn run_server(
             &mut api,
             device_config.clone(),
             config.device_path.as_deref(),
+            family,
         ) else {
             // Interrupted by signal
             return Ok(());
@@ -114,8 +125,7 @@ pub fn run_debug_dump(
     let api = hidapi::HidApi::new()?;
     let device_config = device_config.unwrap_or_default();
 
-    // If more devices are ever supported, add selection logic
-    let device = devices::triton::Triton::find(device_config, &api, device_path)?;
+    let device = devices::SupportedDevice::find(device_config, &api, device_path)?;
 
     log::info!("Controller opened. Running initialization...");
     device.initialize()?;
@@ -213,13 +223,12 @@ fn open_controller_with_retry(
     api: &mut hidapi::HidApi,
     device_config: devices::DeviceConfig,
     device_path: Option<&str>,
+    family: Option<DeviceFamily>,
 ) -> Option<impl devices::Device + use<>> {
     loop {
         if !running.load(READ_ATOMIC_BOOL_ORDERING) {
             return None;
         }
-
-        // If more devices are ever supported, add selection logic
 
         // Refresh devices in case any were dis/reconnected
         if let Err(err) = api.refresh_devices() {
@@ -227,7 +236,14 @@ fn open_controller_with_retry(
             return None;
         }
 
-        match devices::triton::Triton::find(device_config.clone(), api, device_path) {
+        let result = match family {
+            Some(family) => {
+                devices::SupportedDevice::find_family(family, device_config.clone(), api, device_path)
+            }
+            None => devices::SupportedDevice::find(device_config.clone(), api, device_path),
+        };
+
+        match result {
             Ok(d) => return Some(d),
             Err(e) => {
                 log::warn!(
