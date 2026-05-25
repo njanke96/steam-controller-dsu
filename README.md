@@ -43,7 +43,7 @@ steam-controller-dsu -b left_grip,right_grip --gyro-activation-mode all --gyro-d
 ### Steam launch option example
 
 ```bash
-/path/to/steam-controller-dsu -L & env MANGOHUD=1 %command; pgrep -f steam-controller-dsu | xargs kill
+/path/to/steam-controller-dsu -L & env MANGOHUD=1 %command%; pgrep -f steam-controller-dsu | xargs kill
 ```
 
 ### Full usage
