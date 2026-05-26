@@ -1,7 +1,6 @@
 //! Contains adapters from raw HID data to DSU frames for supported devices.
 //!
-//! All devices implement the [`Device`](crate::devices::Device) trait and can be selected
-//! through [`SupportedDevice`].
+//! All devices implement the [`Device`](crate::devices::Device) trait.
 
 pub mod legacy;
 pub mod triton;
@@ -9,7 +8,8 @@ pub(crate) mod util;
 
 mod device;
 
-use hidapi::HidApi;
+use std::fmt;
+use std::str::FromStr;
 
 use crate::errors::DeviceError;
 
@@ -19,12 +19,6 @@ pub use device::DeviceConfig;
 pub use device::FrameDevice;
 pub use device::GyroActivationMode;
 
-/// Supported controller families.
-pub enum SupportedDevice {
-	Triton(triton::Triton),
-	Legacy(legacy::LegacySteamController),
-}
-
 /// A specific Steam Controller family.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeviceFamily {
@@ -32,46 +26,31 @@ pub enum DeviceFamily {
 	Legacy,
 }
 
-impl SupportedDevice {
-	/// Find the first supported controller.
-	pub fn find(
-		config: DeviceConfig,
-		api: &HidApi,
-		device_path: Option<&str>,
-	) -> Result<Self, DeviceError> {
-		Self::find_family(DeviceFamily::Triton, config.clone(), api, device_path).or_else(|_| {
-			Self::find_family(DeviceFamily::Legacy, config, api, device_path)
-		})
+impl Default for DeviceFamily {
+	fn default() -> Self {
+		Self::Triton
 	}
+}
 
-	/// Find a controller from the requested family.
-	pub fn find_family(
-		family: DeviceFamily,
-		config: DeviceConfig,
-		api: &HidApi,
-		device_path: Option<&str>,
-	) -> Result<Self, DeviceError> {
-		match family {
-			DeviceFamily::Triton => triton::Triton::find(config, api, device_path).map(Self::Triton),
-			DeviceFamily::Legacy => {
-				legacy::LegacySteamController::find(config, api, device_path).map(Self::Legacy)
-			}
+
+impl fmt::Display for DeviceFamily {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			Self::Triton => f.write_str("triton"),
+			Self::Legacy => f.write_str("legacy"),
 		}
 	}
 }
 
-impl Device for SupportedDevice {
-	fn initialize(&self) -> Result<(), DeviceError> {
-		match self {
-			Self::Triton(device) => device.initialize(),
-			Self::Legacy(device) => device.initialize(),
-		}
-	}
 
-	fn read_frame(&self) -> Result<crate::dsu::DSUFrame, DeviceError> {
-		match self {
-			Self::Triton(device) => device.read_frame(),
-			Self::Legacy(device) => device.read_frame(),
+impl FromStr for DeviceFamily {
+	type Err = DeviceError;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		match s {
+			"triton" => Ok(Self::Triton),
+			"legacy" => Ok(Self::Legacy),
+			_ => Err(DeviceError::InvalidDeviceFamily(s.to_string())),
 		}
 	}
 }

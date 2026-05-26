@@ -4,6 +4,7 @@ use hidapi::{HidApi, HidDevice};
 use std::time::Duration;
 
 use crate::devices::device::Device;
+use crate::devices::FrameDevice;
 use crate::devices::util::{is_u32_masked_button_pressed, scale_stick_to_byte, scale_trigger_to_byte};
 use crate::devices::{DeviceButton, DeviceConfig, GyroActivationMode};
 use crate::dsu::DSUFrame;
@@ -206,7 +207,7 @@ impl LegacySteamController {
         Ok(())
     }
 
-    fn to_dsu_frame(&self, frame: &LegacyFrame, gyro_disabled: bool) -> DSUFrame {
+    fn to_dsu_frame_impl(&self, frame: &LegacyFrame, gyro_disabled: bool) -> DSUFrame {
         let l2 = scale_trigger_to_byte(((frame.trigger_left as u16) << 7 | frame.trigger_left as u16) as i16);
         let r2 = scale_trigger_to_byte(((frame.trigger_right as u16) << 7 | frame.trigger_right as u16) as i16);
 
@@ -266,7 +267,7 @@ impl LegacySteamController {
         }
     }
 
-    fn is_device_button_pressed(&self, button: &DeviceButton, frame: &LegacyFrame) -> bool {
+    fn is_device_button_pressed_impl(&self, button: &DeviceButton, frame: &LegacyFrame) -> bool {
         match button {
             DeviceButton::DpadLeft => is_u32_masked_button_pressed(frame.buttons as u32, MASK_DPAD_LEFT as u32),
             DeviceButton::DpadDown => is_u32_masked_button_pressed(frame.buttons as u32, MASK_DPAD_DOWN as u32),
@@ -296,11 +297,21 @@ impl LegacySteamController {
             DeviceButton::RightStickTouch => false,
             DeviceButton::LeftPadTouch => frame.left_pad_touch,
             DeviceButton::RightPadTouch => frame.right_pad_touch,
-            DeviceButton::LeftGrip => frame.left_grip,
-            DeviceButton::RightGrip => frame.right_grip,
+            DeviceButton::LeftGrip => false,
+            DeviceButton::RightGrip => false,
             DeviceButton::Unknown => false,
         }
     }
+}
+
+impl FrameDevice<LegacyFrame> for LegacySteamController {
+	fn to_dsu_frame(&self, frame: &LegacyFrame, gyro_disabled: bool) -> DSUFrame {
+		self.to_dsu_frame_impl(frame, gyro_disabled)
+	}
+
+	fn is_device_button_pressed(&self, button: &DeviceButton, frame: &LegacyFrame) -> bool {
+		self.is_device_button_pressed_impl(button, frame)
+	}
 }
 
 impl Device for LegacySteamController {
@@ -323,12 +334,12 @@ impl Device for LegacySteamController {
 
         if !inputs.is_empty() {
             enable_gyro = match self.config.gyro_activation_mode {
-                GyroActivationMode::Any => inputs.iter().any(|button| self.is_device_button_pressed(button, &frame)),
-                GyroActivationMode::All => inputs.iter().all(|button| self.is_device_button_pressed(button, &frame)),
+                GyroActivationMode::Any => inputs.iter().any(|button| self.is_device_button_pressed_impl(button, &frame)),
+                GyroActivationMode::All => inputs.iter().all(|button| self.is_device_button_pressed_impl(button, &frame)),
             };
         }
 
-        Ok(self.to_dsu_frame(&frame, !enable_gyro))
+        Ok(FrameDevice::to_dsu_frame(self, &frame, !enable_gyro))
     }
 }
 

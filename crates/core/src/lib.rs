@@ -33,16 +33,7 @@ pub fn run_server(
     running: Arc<atomic::AtomicBool>,
     config: server::ServerConfig,
     device_config: devices::DeviceConfig,
-) -> Result<(), ServerError> {
-    run_server_for_family(running, config, device_config, None)
-}
-
-/// Run the server loop until `running` is `false` for a specific controller family.
-pub fn run_server_for_family(
-    running: Arc<atomic::AtomicBool>,
-    config: server::ServerConfig,
-    device_config: devices::DeviceConfig,
-    family: Option<DeviceFamily>,
+    family: DeviceFamily,
 ) -> Result<(), ServerError> {
     let mut api = hidapi::HidApi::new()?;
 
@@ -121,11 +112,12 @@ pub fn run_debug_dump(
     running: Arc<atomic::AtomicBool>,
     device_path: Option<&str>,
     device_config: Option<devices::DeviceConfig>,
+    family: DeviceFamily,
 ) -> Result<(), DeviceError> {
     let api = hidapi::HidApi::new()?;
     let device_config = device_config.unwrap_or_default();
 
-    let device = devices::SupportedDevice::find(device_config, &api, device_path)?;
+    let device = open_device(family, device_config, &api, device_path)?;
 
     log::info!("Controller opened. Running initialization...");
     device.initialize()?;
@@ -223,8 +215,8 @@ fn open_controller_with_retry(
     api: &mut hidapi::HidApi,
     device_config: devices::DeviceConfig,
     device_path: Option<&str>,
-    family: Option<DeviceFamily>,
-) -> Option<impl devices::Device + use<>> {
+    family: DeviceFamily,
+) -> Option<Box<dyn devices::Device + Send>> {
     loop {
         if !running.load(READ_ATOMIC_BOOL_ORDERING) {
             return None;
@@ -236,14 +228,7 @@ fn open_controller_with_retry(
             return None;
         }
 
-        let result = match family {
-            Some(family) => {
-                devices::SupportedDevice::find_family(family, device_config.clone(), api, device_path)
-            }
-            None => devices::SupportedDevice::find(device_config.clone(), api, device_path),
-        };
-
-        match result {
+        match open_device(family, device_config.clone(), api, device_path) {
             Ok(d) => return Some(d),
             Err(e) => {
                 log::warn!(
@@ -256,6 +241,18 @@ fn open_controller_with_retry(
                 );
             }
         }
+    }
+}
+
+fn open_device(
+    family: DeviceFamily,
+    config: devices::DeviceConfig,
+    api: &hidapi::HidApi,
+    device_path: Option<&str>,
+) -> Result<Box<dyn devices::Device + Send>, DeviceError> {
+    match family {
+        DeviceFamily::Triton => Ok(Box::new(devices::triton::Triton::find(config, api, device_path)?)),
+        DeviceFamily::Legacy => Ok(Box::new(devices::legacy::LegacySteamController::find(config, api, device_path)?)),
     }
 }
 

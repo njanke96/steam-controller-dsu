@@ -43,4 +43,7 @@ pub enum DeviceError {
     /// Invalid gyro activation mode string
     #[error("Invalid gyro activation mode string: {0}")]
     InvalidGyroActivationMode(String),
+    /// Invalid device family string
+    #[error("Invalid device family string: {0}")]
+    InvalidDeviceFamily(String),
 }

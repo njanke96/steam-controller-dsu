@@ -18,9 +18,9 @@ pub struct CliArguments {
     #[arg(long, default_value_t = 26760)]
     pub port: u16,
 
-    /// Optional UDP port for a second server that should open the legacy Steam Controller.
-    #[arg(long)]
-    pub legacy_port: Option<u16>,
+    /// Steam Controller family to open.
+    #[arg(long, default_value_t = devices::DeviceFamily::default())]
+    pub device: devices::DeviceFamily,
 
     /// When set invert the motion controls pitch axis.
     #[arg(long, default_value_t = false)]
@@ -33,10 +33,6 @@ pub struct CliArguments {
     /// Specific device path to open. Example: /dev/hidraw11
     #[arg(long)]
     pub device_path: Option<String>,
-
-    /// Specific device path for the legacy Steam Controller. Example: /dev/hidraw12
-    #[arg(long)]
-    pub legacy_device_path: Option<String>,
 
     /// Don't enable lizard mode when the device is closed (such as on program exit)
     #[arg(short = 'L', long, default_value_t = false)]
@@ -124,9 +120,12 @@ pub fn entrypoint() -> i32 {
     };
 
     if args.debug {
-        if let Err(err) =
-            scdsu_core::run_debug_dump(running, args.device_path.as_deref(), Some(device_config))
-        {
+        if let Err(err) = scdsu_core::run_debug_dump(
+            running,
+            args.device_path.as_deref(),
+            Some(device_config),
+            args.device,
+        ) {
             log::error!("Error from run_debug_dump: {err}");
         }
         return 1;
@@ -142,53 +141,7 @@ pub fn entrypoint() -> i32 {
 
     log::debug!("Server configuration from cli args: {config:?}");
 
-    if let Some(legacy_port) = args.legacy_port {
-        if legacy_port == args.port {
-            log::error!("Legacy port must be different from the primary port.");
-            return 1;
-        }
-
-        let legacy_config = scdsu_core::ServerConfig {
-            bind_addr: config.bind_addr.clone(),
-            port: legacy_port,
-            invert_pitch: config.invert_pitch,
-            slot: config.slot,
-            device_path: args.legacy_device_path,
-        };
-
-        log::debug!("Legacy server configuration from cli args: {legacy_config:?}");
-
-        let legacy_running = running.clone();
-        let legacy_device_config = device_config.clone();
-        let legacy_shutdown = running.clone();
-        let legacy_handle = std::thread::spawn(move || {
-            if let Err(err) = scdsu_core::run_server_for_family(
-                legacy_running,
-                legacy_config,
-                legacy_device_config,
-                Some(devices::DeviceFamily::Legacy),
-            ) {
-                log::error!("Error from legacy run_server: {err}");
-                legacy_shutdown.store(false, atomic::Ordering::SeqCst);
-            }
-        });
-
-        let triton_running = running.clone();
-        if let Err(err) = scdsu_core::run_server_for_family(
-            triton_running,
-            config,
-            device_config,
-            Some(devices::DeviceFamily::Triton),
-        ) {
-            log::error!("Error from Triton run_server: {err}");
-            running.store(false, atomic::Ordering::SeqCst);
-        }
-
-        let _ = legacy_handle.join();
-        return 0;
-    }
-
-    if let Err(err) = scdsu_core::run_server(running, config, device_config) {
+    if let Err(err) = scdsu_core::run_server(running, config, device_config, args.device) {
         log::error!("Error from run_server: {err}");
         return 1;
     }

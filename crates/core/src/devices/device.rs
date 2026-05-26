@@ -12,6 +12,19 @@ pub trait Device {
     fn read_frame(&self) -> Result<DSUFrame, DeviceError>;
 }
 
+impl<T> Device for Box<T>
+where
+    T: Device + ?Sized,
+{
+    fn initialize(&self) -> Result<(), DeviceError> {
+        (**self).initialize()
+    }
+
+    fn read_frame(&self) -> Result<DSUFrame, DeviceError> {
+        (**self).read_frame()
+    }
+}
+
 /// A trait defining shared behavior dependant on the frame type `F` between compatible devices.
 pub trait FrameDevice<F> {
     fn to_dsu_frame(&self, frame: &F, gyro_disabled: bool) -> DSUFrame;
