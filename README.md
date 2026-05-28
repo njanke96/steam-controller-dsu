@@ -43,7 +43,13 @@ steam-controller-dsu -b left_grip,right_grip --gyro-activation-mode all --gyro-d
 ### Steam launch option example
 
 ```bash
-/path/to/steam-controller-dsu -L & env MANGOHUD=1 %command; pgrep -f steam-controller-dsu | xargs kill
+/path/to/steam-controller-dsu -L & env MANGOHUD=1 %command%; pgrep -f steam-controller-dsu | xargs kill
+```
+
+Example with both the 2026 and 2015 Steam Controllers connected simultaneously:
+
+```bash
+/path/to/steam-controller-dsu --device triton --port 26760 -L & /path/to/steam-controller-dsu --device legacy --port 26761 -L & %command%; pgrep -f steam-controller-dsu | xargs kill
 ```
 
 ### Full usage
@@ -62,6 +68,12 @@ Options:
           UDP port for the CemuHook server
           
           [default: 26760]
+
+      --device <DEVICE>
+          Steam Controller family to open
+          
+          [default: triton]
+          [possible values: triton, legacy]
 
       --invert-pitch
           When set invert the motion controls pitch axis

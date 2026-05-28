@@ -18,6 +18,10 @@ pub struct CliArguments {
     #[arg(long, default_value_t = 26760)]
     pub port: u16,
 
+    /// Steam Controller family to open.
+    #[arg(long, default_value_t = devices::DeviceFamily::default())]
+    pub device: devices::DeviceFamily,
+
     /// When set invert the motion controls pitch axis.
     #[arg(long, default_value_t = false)]
     pub invert_pitch: bool,
@@ -116,9 +120,12 @@ pub fn entrypoint() -> i32 {
     };
 
     if args.debug {
-        if let Err(err) =
-            scdsu_core::run_debug_dump(running, args.device_path.as_deref(), Some(device_config))
-        {
+        if let Err(err) = scdsu_core::run_debug_dump(
+            running,
+            args.device_path.as_deref(),
+            Some(device_config),
+            args.device,
+        ) {
             log::error!("Error from run_debug_dump: {err}");
         }
         return 1;
@@ -134,7 +141,7 @@ pub fn entrypoint() -> i32 {
 
     log::debug!("Server configuration from cli args: {config:?}");
 
-    if let Err(err) = scdsu_core::run_server(running, config, device_config) {
+    if let Err(err) = scdsu_core::run_server(running, config, device_config, args.device) {
         log::error!("Error from run_server: {err}");
         return 1;
     }

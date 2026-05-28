@@ -12,6 +12,19 @@ pub trait Device {
     fn read_frame(&self) -> Result<DSUFrame, DeviceError>;
 }
 
+impl<T> Device for Box<T>
+where
+    T: Device + ?Sized,
+{
+    fn initialize(&self) -> Result<(), DeviceError> {
+        (**self).initialize()
+    }
+
+    fn read_frame(&self) -> Result<DSUFrame, DeviceError> {
+        (**self).read_frame()
+    }
+}
+
 /// A trait defining shared behavior dependant on the frame type `F` between compatible devices.
 pub trait FrameDevice<F> {
     fn to_dsu_frame(&self, frame: &F, gyro_disabled: bool) -> DSUFrame;
@@ -197,7 +210,7 @@ impl std::fmt::Display for GyroActivationMode {
 /// see ['ServerConfig'](crate::server::ServerConfig)
 #[derive(Debug, Clone)]
 pub struct DeviceConfig {
-    /// Don't enable lizard mode when the device is dropped (Triton)
+    /// Don't enable lizard mode when the device is dropped.
     pub no_enable_lizard_mode_on_close: bool,
     /// Inputs that must be pressed to send gyro data through the DSU server.
     pub gyro_activation_inputs: Vec<DeviceButton>,
