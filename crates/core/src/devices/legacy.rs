@@ -3,9 +3,11 @@
 use hidapi::{HidApi, HidDevice};
 use std::time::Duration;
 
-use crate::devices::device::Device;
 use crate::devices::FrameDevice;
-use crate::devices::util::{is_u32_masked_button_pressed, scale_stick_to_byte, scale_trigger_to_byte};
+use crate::devices::device::Device;
+use crate::devices::util::{
+    is_u32_masked_button_pressed, scale_stick_to_byte, scale_trigger_to_byte,
+};
 use crate::devices::{DeviceButton, DeviceConfig, GyroActivationMode};
 use crate::dsu::DSUFrame;
 use crate::errors::DeviceError;
@@ -97,9 +99,7 @@ impl LegacyFrame {
             return None;
         }
 
-        let buttons = u64::from_le_bytes([
-            data[8], data[9], data[10], 0, 0, 0, 0, 0,
-        ]);
+        let buttons = u64::from_le_bytes([data[8], data[9], data[10], 0, 0, 0, 0, 0]);
 
         Some(Self {
             buttons,
@@ -116,11 +116,25 @@ impl LegacyFrame {
             gyro_x: i16::from_le_bytes([data[34], data[35]]),
             gyro_y: i16::from_le_bytes([data[36], data[37]]),
             gyro_z: i16::from_le_bytes([data[38], data[39]]),
-            left_pad_touch: is_u32_masked_button_pressed(buttons as u32, MASK_LEFT_PAD_TOUCH as u32)
-                || is_u32_masked_button_pressed(buttons as u32, MASK_LEFT_PAD_AND_JOYSTICK as u32),
-            right_pad_touch: is_u32_masked_button_pressed(buttons as u32, MASK_RIGHT_PAD_TOUCH as u32),
-            left_stick_click: is_u32_masked_button_pressed(buttons as u32, MASK_LEFT_STICK_CLICK as u32),
-            right_pad_click: is_u32_masked_button_pressed(buttons as u32, MASK_RIGHT_PAD_CLICKED as u32),
+            left_pad_touch: is_u32_masked_button_pressed(
+                buttons as u32,
+                MASK_LEFT_PAD_TOUCH as u32,
+            ) || is_u32_masked_button_pressed(
+                buttons as u32,
+                MASK_LEFT_PAD_AND_JOYSTICK as u32,
+            ),
+            right_pad_touch: is_u32_masked_button_pressed(
+                buttons as u32,
+                MASK_RIGHT_PAD_TOUCH as u32,
+            ),
+            left_stick_click: is_u32_masked_button_pressed(
+                buttons as u32,
+                MASK_LEFT_STICK_CLICK as u32,
+            ),
+            right_pad_click: is_u32_masked_button_pressed(
+                buttons as u32,
+                MASK_RIGHT_PAD_CLICKED as u32,
+            ),
             left_grip: is_u32_masked_button_pressed(buttons as u32, MASK_LEFT_GRIP as u32),
             right_grip: is_u32_masked_button_pressed(buttons as u32, MASK_RIGHT_GRIP as u32),
         })
@@ -167,7 +181,11 @@ impl LegacySteamController {
 
             let hid = info.open_device(api)?;
             probe_device(&hid)?;
-            log::info!("Opened legacy controller on {} ({:?})", target, connection_mode_from_pid(info.product_id()));
+            log::info!(
+                "Opened legacy controller on {} ({:?})",
+                target,
+                connection_mode_from_pid(info.product_id())
+            );
             return Ok(Self { config, hid });
         }
 
@@ -189,7 +207,11 @@ impl LegacySteamController {
                 continue;
             }
 
-            log::info!("Opened legacy controller on {} ({:?})", path, connection_mode_from_pid(info.product_id()));
+            log::info!(
+                "Opened legacy controller on {} ({:?})",
+                path,
+                connection_mode_from_pid(info.product_id())
+            );
             return Ok(Self { config, hid });
         }
 
@@ -208,8 +230,12 @@ impl LegacySteamController {
     }
 
     fn to_dsu_frame_impl(&self, frame: &LegacyFrame, gyro_disabled: bool) -> DSUFrame {
-        let l2 = scale_trigger_to_byte(((frame.trigger_left as u16) << 7 | frame.trigger_left as u16) as i16);
-        let r2 = scale_trigger_to_byte(((frame.trigger_right as u16) << 7 | frame.trigger_right as u16) as i16);
+        let l2 = scale_trigger_to_byte(
+            ((frame.trigger_left as u16) << 7 | frame.trigger_left as u16) as i16,
+        );
+        let r2 = scale_trigger_to_byte(
+            ((frame.trigger_right as u16) << 7 | frame.trigger_right as u16) as i16,
+        );
 
         let gyro_x_dps = frame.gyro_x as f32 / GYRO_PER_DPS;
         let gyro_y_dps = -(frame.gyro_z as f32 / GYRO_PER_DPS);
@@ -261,7 +287,9 @@ impl LegacySteamController {
             accel_x: zero_on_gyro_disabled(-(frame.accel_x as f32 / ACCEL_PER_G)),
             accel_y: zero_on_gyro_disabled(-(frame.accel_z as f32 / ACCEL_PER_G)),
             accel_z: zero_on_gyro_disabled(frame.accel_y as f32 / ACCEL_PER_G),
-            gyro_x: zero_on_gyro_disabled(apply_deadzone(gyro_x_dps) * self.config.gyro_pitch_scale),
+            gyro_x: zero_on_gyro_disabled(
+                apply_deadzone(gyro_x_dps) * self.config.gyro_pitch_scale,
+            ),
             gyro_y: zero_on_gyro_disabled(apply_deadzone(gyro_y_dps) * self.config.gyro_yaw_scale),
             gyro_z: zero_on_gyro_disabled(apply_deadzone(gyro_z_dps) * self.config.gyro_roll_scale),
         }
@@ -269,24 +297,48 @@ impl LegacySteamController {
 
     fn is_device_button_pressed_impl(&self, button: &DeviceButton, frame: &LegacyFrame) -> bool {
         match button {
-            DeviceButton::DpadLeft => is_u32_masked_button_pressed(frame.buttons as u32, MASK_DPAD_LEFT as u32),
-            DeviceButton::DpadDown => is_u32_masked_button_pressed(frame.buttons as u32, MASK_DPAD_DOWN as u32),
-            DeviceButton::DpadRight => is_u32_masked_button_pressed(frame.buttons as u32, MASK_DPAD_RIGHT as u32),
-            DeviceButton::DpadUp => is_u32_masked_button_pressed(frame.buttons as u32, MASK_DPAD_UP as u32),
-            DeviceButton::Start => is_u32_masked_button_pressed(frame.buttons as u32, MASK_START as u32),
-            DeviceButton::Select => is_u32_masked_button_pressed(frame.buttons as u32, MASK_SELECT as u32),
-            DeviceButton::Guide => is_u32_masked_button_pressed(frame.buttons as u32, MASK_GUIDE as u32),
+            DeviceButton::DpadLeft => {
+                is_u32_masked_button_pressed(frame.buttons as u32, MASK_DPAD_LEFT as u32)
+            }
+            DeviceButton::DpadDown => {
+                is_u32_masked_button_pressed(frame.buttons as u32, MASK_DPAD_DOWN as u32)
+            }
+            DeviceButton::DpadRight => {
+                is_u32_masked_button_pressed(frame.buttons as u32, MASK_DPAD_RIGHT as u32)
+            }
+            DeviceButton::DpadUp => {
+                is_u32_masked_button_pressed(frame.buttons as u32, MASK_DPAD_UP as u32)
+            }
+            DeviceButton::Start => {
+                is_u32_masked_button_pressed(frame.buttons as u32, MASK_START as u32)
+            }
+            DeviceButton::Select => {
+                is_u32_masked_button_pressed(frame.buttons as u32, MASK_SELECT as u32)
+            }
+            DeviceButton::Guide => {
+                is_u32_masked_button_pressed(frame.buttons as u32, MASK_GUIDE as u32)
+            }
             DeviceButton::Quaternary => false,
             DeviceButton::A => is_u32_masked_button_pressed(frame.buttons as u32, MASK_A as u32),
             DeviceButton::B => is_u32_masked_button_pressed(frame.buttons as u32, MASK_B as u32),
             DeviceButton::X => is_u32_masked_button_pressed(frame.buttons as u32, MASK_X as u32),
             DeviceButton::Y => is_u32_masked_button_pressed(frame.buttons as u32, MASK_Y as u32),
-            DeviceButton::L1 => is_u32_masked_button_pressed(frame.buttons as u32, MASK_LEFT_BUMPER as u32),
-            DeviceButton::R1 => is_u32_masked_button_pressed(frame.buttons as u32, MASK_RIGHT_BUMPER as u32),
-            DeviceButton::L2 => scale_trigger_to_byte(((frame.trigger_left as u16) << 7 | frame.trigger_left as u16) as i16)
-                >= ANALOG_TRIGGER_TO_DIGITAL_THRESHOLD,
-            DeviceButton::R2 => scale_trigger_to_byte(((frame.trigger_right as u16) << 7 | frame.trigger_right as u16) as i16)
-                >= ANALOG_TRIGGER_TO_DIGITAL_THRESHOLD,
+            DeviceButton::L1 => {
+                is_u32_masked_button_pressed(frame.buttons as u32, MASK_LEFT_BUMPER as u32)
+            }
+            DeviceButton::R1 => {
+                is_u32_masked_button_pressed(frame.buttons as u32, MASK_RIGHT_BUMPER as u32)
+            }
+            DeviceButton::L2 => {
+                scale_trigger_to_byte(
+                    ((frame.trigger_left as u16) << 7 | frame.trigger_left as u16) as i16,
+                ) >= ANALOG_TRIGGER_TO_DIGITAL_THRESHOLD
+            }
+            DeviceButton::R2 => {
+                scale_trigger_to_byte(
+                    ((frame.trigger_right as u16) << 7 | frame.trigger_right as u16) as i16,
+                ) >= ANALOG_TRIGGER_TO_DIGITAL_THRESHOLD
+            }
             DeviceButton::L3 => frame.left_stick_click,
             DeviceButton::R3 => frame.right_pad_click,
             DeviceButton::L4 => false,
@@ -305,13 +357,13 @@ impl LegacySteamController {
 }
 
 impl FrameDevice<LegacyFrame> for LegacySteamController {
-	fn to_dsu_frame(&self, frame: &LegacyFrame, gyro_disabled: bool) -> DSUFrame {
-		self.to_dsu_frame_impl(frame, gyro_disabled)
-	}
+    fn to_dsu_frame(&self, frame: &LegacyFrame, gyro_disabled: bool) -> DSUFrame {
+        self.to_dsu_frame_impl(frame, gyro_disabled)
+    }
 
-	fn is_device_button_pressed(&self, button: &DeviceButton, frame: &LegacyFrame) -> bool {
-		self.is_device_button_pressed_impl(button, frame)
-	}
+    fn is_device_button_pressed(&self, button: &DeviceButton, frame: &LegacyFrame) -> bool {
+        self.is_device_button_pressed_impl(button, frame)
+    }
 }
 
 impl Device for LegacySteamController {
@@ -334,8 +386,12 @@ impl Device for LegacySteamController {
 
         if !inputs.is_empty() {
             enable_gyro = match self.config.gyro_activation_mode {
-                GyroActivationMode::Any => inputs.iter().any(|button| self.is_device_button_pressed_impl(button, &frame)),
-                GyroActivationMode::All => inputs.iter().all(|button| self.is_device_button_pressed_impl(button, &frame)),
+                GyroActivationMode::Any => inputs
+                    .iter()
+                    .any(|button| self.is_device_button_pressed_impl(button, &frame)),
+                GyroActivationMode::All => inputs
+                    .iter()
+                    .all(|button| self.is_device_button_pressed_impl(button, &frame)),
             };
         }
 

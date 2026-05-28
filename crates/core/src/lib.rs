@@ -251,8 +251,16 @@ fn open_device(
     device_path: Option<&str>,
 ) -> Result<Box<dyn devices::Device + Send>, DeviceError> {
     match family {
-        DeviceFamily::Triton => Ok(Box::new(devices::triton::Triton::find(config, api, device_path)?)),
-        DeviceFamily::Legacy => Ok(Box::new(devices::legacy::LegacySteamController::find(config, api, device_path)?)),
+        DeviceFamily::Triton => Ok(Box::new(devices::triton::Triton::find(
+            config,
+            api,
+            device_path,
+        )?)),
+        DeviceFamily::Legacy => Ok(Box::new(devices::legacy::LegacySteamController::find(
+            config,
+            api,
+            device_path,
+        )?)),
     }
 }
 

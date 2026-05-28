@@ -20,37 +20,30 @@ pub use device::FrameDevice;
 pub use device::GyroActivationMode;
 
 /// A specific Steam Controller family.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DeviceFamily {
-	Triton,
-	Legacy,
+    #[default]
+    Triton,
+    Legacy,
 }
-
-impl Default for DeviceFamily {
-	fn default() -> Self {
-		Self::Triton
-	}
-}
-
 
 impl fmt::Display for DeviceFamily {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			Self::Triton => f.write_str("triton"),
-			Self::Legacy => f.write_str("legacy"),
-		}
-	}
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Triton => f.write_str("triton"),
+            Self::Legacy => f.write_str("legacy"),
+        }
+    }
 }
 
-
 impl FromStr for DeviceFamily {
-	type Err = DeviceError;
+    type Err = DeviceError;
 
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		match s {
-			"triton" => Ok(Self::Triton),
-			"legacy" => Ok(Self::Legacy),
-			_ => Err(DeviceError::InvalidDeviceFamily(s.to_string())),
-		}
-	}
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "triton" => Ok(Self::Triton),
+            "legacy" => Ok(Self::Legacy),
+            _ => Err(DeviceError::InvalidDeviceFamily(s.to_string())),
+        }
+    }
 }
