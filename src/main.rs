@@ -18,7 +18,9 @@ pub struct CliArguments {
     #[arg(long, default_value_t = 26760)]
     pub port: u16,
 
-    /// Steam Controller family to open.
+    /// Device family to open.
+    ///
+    /// Possible values: triton, legacy
     #[arg(long, default_value_t = devices::DeviceFamily::default())]
     pub device: devices::DeviceFamily,
 
