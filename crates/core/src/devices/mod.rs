@@ -2,48 +2,17 @@
 //!
 //! All devices implement the [`Device`](crate::devices::Device) trait.
 
+// Triton Steam Controller (2026)
 pub mod legacy;
+/// Legacy Steam Controller (2015)
 pub mod triton;
 pub(crate) mod util;
 
 mod device;
 
-use std::fmt;
-use std::str::FromStr;
-
-use crate::errors::DeviceError;
-
 pub use device::Device;
 pub use device::DeviceButton;
 pub use device::DeviceConfig;
+pub use device::DeviceFamily;
 pub use device::FrameDevice;
 pub use device::GyroActivationMode;
-
-/// A specific Steam Controller family.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum DeviceFamily {
-    #[default]
-    Triton,
-    Legacy,
-}
-
-impl fmt::Display for DeviceFamily {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Triton => f.write_str("triton"),
-            Self::Legacy => f.write_str("legacy"),
-        }
-    }
-}
-
-impl FromStr for DeviceFamily {
-    type Err = DeviceError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "triton" => Ok(Self::Triton),
-            "legacy" => Ok(Self::Legacy),
-            _ => Err(DeviceError::InvalidDeviceFamily(s.to_string())),
-        }
-    }
-}

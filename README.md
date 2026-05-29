@@ -39,7 +39,7 @@ Start a server with the default options:
 steam-controller-dsu
 ```
 
-Start a server with the gyro only enabled when the gyro grips are activated, with a small deadzone:
+Start a server with the gyro only enabled when the gyro grips are activated, with a 20 deg/s deadzone:
 
 ```
 steam-controller-dsu -b left_grip,right_grip --gyro-activation-mode all --gyro-deadzone 20
@@ -60,32 +60,35 @@ Example with both the 2026 and 2015 Steam Controllers connected simultaneously:
 ### Full usage
 
 ```
+Usage: steam-controller-dsu [OPTIONS]
+
 Options:
       --debug
           Run in debug mode: open the controller and dump raw IMU frames
 
       --bind-addr <BIND_ADDR>
           UDP bind address for the CemuHook server
-          
+
           [default: 0.0.0.0]
 
       --port <PORT>
           UDP port for the CemuHook server
-          
+
           [default: 26760]
 
       --device <DEVICE>
-          Steam Controller family to open
-          
+          Device family to open.
+
+          Possible values: triton, legacy
+
           [default: triton]
-          [possible values: triton, legacy]
 
       --invert-pitch
           When set invert the motion controls pitch axis
 
       --slot <SLOT>
           CemuHook controller slot to report on (0-3 for Controllers 1 through 4). Controller number is slot + 1
-          
+
           [default: 0]
 
       --device-path <DEVICE_PATH>
@@ -103,41 +106,40 @@ Options:
 Gyro Options:
   -b, --gyro-activation-buttons <GYRO_ACTIVATION_BUTTONS>
           Comma-separated list of buttons/sensors that activate gyro reporting.
-          
+
           Depending on the emulated game, turning the gyro on/off might not work how you expect!
-          
+
           Example value: left_grip,right_grip
-          
-          Possible values to include in the list: dpad_left, dpad_down, dpad_right, dpad_up, start, select, guide, quaternary,
-a, b, x, y, l1, r1, l2, r2, l3, r3, l4, l5, r4, r5, left_stick_touch, right_stick_touch, left_pad_touch, right_pad_touch, left_grip, right_grip
+
+          Possible values to include in the list: dpad_left, dpad_down, dpad_right, dpad_up, start, select, guide, quaternary, a, b, x, y, l1, r1, l2, r2, l3, r3, l4, l5, r4, r5, left_stick_touch, right_stick_touch, left_pad_touch, right_pad_touch, left_grip, right_grip
 
       --gyro-activation-mode <GYRO_ACTIVATION_MODE>
           Gyro activation mode
-          
+
           Possible values: any, all
-          
+
           When any is specified, at least one gyro activation button must be pressed. When all is specified, all gyro activation buttons must be pressed.
-          
+
           [default: any]
 
       --gyro-deadzone <GYRO_DEADZONE>
           Gyro deadzone in degrees per second. Values below this threshold are reported as zero
-          
+
           [default: 0]
 
       --gyro-pitch-scale <GYRO_PITCH_SCALE>
           Scale factor for the pitch gyro axis
-          
+
           [default: 1]
 
       --gyro-yaw-scale <GYRO_YAW_SCALE>
           Scale factor for the yaw gyro axis
-          
+
           [default: 1]
 
       --gyro-roll-scale <GYRO_ROLL_SCALE>
           Scale factor for the roll gyro axis
-          
+
           [default: 1]
 ```
 
