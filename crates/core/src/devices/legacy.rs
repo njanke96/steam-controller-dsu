@@ -1,4 +1,4 @@
-//! Adapter for the original Steam Controller family.
+//! Adapter for the Legacy Steam Controller (2015)
 
 use hidapi::{HidApi, HidDevice};
 use std::time::Duration;

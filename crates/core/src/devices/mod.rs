@@ -2,9 +2,7 @@
 //!
 //! All devices implement the [`Device`](crate::devices::Device) trait.
 
-// Triton Steam Controller (2026)
 pub mod legacy;
-/// Legacy Steam Controller (2015)
 pub mod triton;
 pub(crate) mod util;
 

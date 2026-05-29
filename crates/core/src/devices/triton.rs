@@ -1,4 +1,4 @@
-//! Adapter for the 2026 Steam Controller (Triton)
+//! Adapter for the Triton Steam Controller (2026)
 
 use hidapi::{HidApi, HidDevice};
 use std::time::Duration;
