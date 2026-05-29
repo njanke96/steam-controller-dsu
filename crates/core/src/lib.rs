@@ -27,8 +27,11 @@ const CONTROLLER_OPEN_RETRY_DELAY_SEC: u64 = 5;
 /// Accepts an [`AtomicBool`](std::sync::atomic::AtomicBool) within an `Arc<>` for signaling when
 /// the server should shut down (set to `false`).
 ///
-/// Accepts `config` and `device_config` for specifying ['ServerConfig'](server::ServerConfig) and
-/// ['DeviceConfig'](devices::DeviceConfig).
+/// Accepts `config` and `device_config` for specifying [`ServerConfig`](server::ServerConfig) and
+/// [`DeviceConfig`](devices::DeviceConfig).
+///
+/// `family` specifies the [`DeviceFamily`](devices::DeviceFamily) to find and pass to
+/// [`spawn_reader`](reader::spawn_reader) for feeding the server device frames.
 pub fn run_server(
     running: Arc<atomic::AtomicBool>,
     config: server::ServerConfig,
@@ -108,6 +111,9 @@ pub fn run_server(
 ///
 /// Accepts an [`AtomicBool`](std::sync::atomic::AtomicBool) within an `Arc<>` for signaling when
 /// the server should shut down. Optionally accepts a `device_path` and `device_config`.
+///
+/// `family` specifies the [`DeviceFamily`](devices::DeviceFamily) to find and pass to
+/// [`spawn_reader`](reader::spawn_reader) for feeding the server device frames.
 pub fn run_debug_dump(
     running: Arc<atomic::AtomicBool>,
     device_path: Option<&str>,
@@ -208,7 +214,8 @@ pub fn run_debug_dump(
     Ok(())
 }
 
-/// Open a controller with unlimited retries
+/// Open a controller of type `family` with unlimited retries.
+///
 /// Returns `None` if interrupted.
 fn open_controller_with_retry(
     running: Arc<atomic::AtomicBool>,
