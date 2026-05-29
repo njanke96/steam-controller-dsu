@@ -155,7 +155,7 @@ Gyro Options:
 
 ## Wishlist
 
-- Support more devices (Steam Deck, 2015 Steam Controller, future Steam Devices, non-Steam devices?)
+- Support more devices (Steam Deck, future Steam Devices, non-Steam devices?)
 
 ## AI Usage
 
