@@ -4,6 +4,12 @@ use std::str::FromStr;
 use crate::dsu::DSUFrame;
 use crate::errors::DeviceError;
 
+/// Default alpha value for gyroscope smoothing
+pub const DEFAULT_GYRO_SMOOTHING_ALPHA: f32 = 0.5;
+
+/// Default alpha value for accelerometer smoothing
+pub const DEFAULT_ACCEL_SMOOTHING_ALPHA: f32 = 0.25;
+
 /// Supported device families
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DeviceFamily {
@@ -35,6 +41,8 @@ impl FromStr for DeviceFamily {
     }
 }
 
+pub type DeviceSmoothingAlphas = (f32, f32);
+
 /// A trait defining shared behavior between compatible devices.
 pub trait Device {
     /// Run any initialization logic the device requires.
@@ -42,6 +50,9 @@ pub trait Device {
 
     /// Read a DSU frame from the device.
     fn read_frame(&self) -> Result<DSUFrame, DeviceError>;
+
+    /// Get the smoothing alphas for the device (gyro_alpha, accel_alpha)
+    fn get_smoothing_alphas(&self) -> DeviceSmoothingAlphas;
 }
 
 impl<T> Device for Box<T>
@@ -54,6 +65,10 @@ where
 
     fn read_frame(&self) -> Result<DSUFrame, DeviceError> {
         (**self).read_frame()
+    }
+
+    fn get_smoothing_alphas(&self) -> DeviceSmoothingAlphas {
+        (**self).get_smoothing_alphas()
     }
 }
 
@@ -256,6 +271,10 @@ pub struct DeviceConfig {
     pub gyro_yaw_scale: f32,
     /// Scale factor applied to the roll gyro axis.
     pub gyro_roll_scale: f32,
+    /// Gyroscope smoothing alpha
+    pub gyro_smoothing_alpha: f32,
+    /// Accelerometer smoothing alpha
+    pub accel_smoothing_alpha: f32,
 }
 
 impl Default for DeviceConfig {
@@ -268,6 +287,8 @@ impl Default for DeviceConfig {
             gyro_pitch_scale: 1.0,
             gyro_yaw_scale: 1.0,
             gyro_roll_scale: 1.0,
+            gyro_smoothing_alpha: DEFAULT_GYRO_SMOOTHING_ALPHA,
+            accel_smoothing_alpha: DEFAULT_ACCEL_SMOOTHING_ALPHA,
         }
     }
 }

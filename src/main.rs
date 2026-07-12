@@ -46,7 +46,7 @@ pub struct CliArguments {
 
 #[derive(Args)]
 #[group(required = false, multiple = true)]
-#[command(next_help_heading = "Gyro Options")]
+#[command(next_help_heading = "Gyro/Accelerometer Options")]
 struct GyroOptions {
     /// Comma-separated list of buttons/sensors that activate gyro reporting.
     ///
@@ -85,6 +85,14 @@ struct GyroOptions {
     /// Scale factor for the roll gyro axis.
     #[arg(long, default_value_t = 1.0)]
     gyro_roll_scale: f32,
+
+    /// Alpha smoothing value for Gyro data between 0.0 and 1.0. Larger values are more responsive but less smooth. 1.0 disables smoothing.
+    #[arg(long, default_value_t = devices::DEFAULT_GYRO_SMOOTHING_ALPHA, value_parser = validate_alpha_arg)]
+    gyro_smoothing_alpha: f32,
+
+    /// Alpha smoothing value for Accelerometer data between 0.0 and 1.0. Larger values are more responsive but less smooth. 1.0 disables smoothing.
+    #[arg(long, default_value_t = devices::DEFAULT_ACCEL_SMOOTHING_ALPHA, value_parser = validate_alpha_arg)]
+    accel_smoothing_alpha: f32,
 }
 
 pub fn entrypoint() -> i32 {
@@ -119,6 +127,8 @@ pub fn entrypoint() -> i32 {
         gyro_pitch_scale: args.gyro_opts.gyro_pitch_scale,
         gyro_yaw_scale: args.gyro_opts.gyro_yaw_scale,
         gyro_roll_scale: args.gyro_opts.gyro_roll_scale,
+        gyro_smoothing_alpha: args.gyro_opts.gyro_smoothing_alpha,
+        accel_smoothing_alpha: args.gyro_opts.accel_smoothing_alpha,
     };
 
     if args.debug {
@@ -154,4 +164,16 @@ pub fn entrypoint() -> i32 {
 fn main() {
     let return_code = entrypoint();
     std::process::exit(return_code);
+}
+
+fn validate_alpha_arg(s: &str) -> Result<f32, String> {
+    let value: f32 = s
+        .parse()
+        .map_err(|_| format!("`{}` is not a valid floating-point number", s))?;
+
+    if (0.0..=1.0).contains(&value) {
+        Ok(value)
+    } else {
+        Err(format!("Value {} is out of range [0.0, 1.0]", value))
+    }
 }

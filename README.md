@@ -103,7 +103,7 @@ Options:
   -V, --version
           Print version
 
-Gyro Options:
+Gyro/Accelerometer Options:
   -b, --gyro-activation-buttons <GYRO_ACTIVATION_BUTTONS>
           Comma-separated list of buttons/sensors that activate gyro reporting.
 
@@ -141,6 +141,16 @@ Gyro Options:
           Scale factor for the roll gyro axis
 
           [default: 1]
+
+      --gyro-smoothing-alpha <GYRO_SMOOTHING_ALPHA>
+          Alpha smoothing value for Gyro data between 0.0 and 1.0. Larger values are more responsive but less smooth. 1.0 disables smoothing
+
+          [default: 0.5]
+
+      --accel-smoothing-alpha <ACCEL_SMOOTHING_ALPHA>
+          Alpha smoothing value for Accelerometer data between 0.0 and 1.0. Larger values are more responsive but less smooth. 1.0 disables smoothing
+
+          [default: 0.25]
 ```
 
 ## Tested Emulators
@@ -148,6 +158,7 @@ Gyro Options:
 - Cemu
   - Quirk: Through Steam input, make sure the controller has no bindings. You need to map controls in Cemu settings through the DSU server,
     existing bindings can mess up the process.
+- Dolphin
 - Ryujinx
 - Eden
 - Azahar
