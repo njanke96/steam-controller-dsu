@@ -131,7 +131,24 @@ where
                 frame_state.last_init_attempt = None;
             }
 
+            // Apply smoothing filter
+            let smooth =
+                |alpha: f32, current: f32, prev: f32| alpha * current + (1.0 - alpha) * prev;
+
+            let (alpha_gyro, alpha_accel) = device.get_smoothing_alphas();
+
+            if let Some(prev_frame) = frame_state.prev_frame {
+                frame.gyro_x = smooth(alpha_gyro, frame.gyro_x, prev_frame.gyro_x);
+                frame.gyro_y = smooth(alpha_gyro, frame.gyro_y, prev_frame.gyro_y);
+                frame.gyro_z = smooth(alpha_gyro, frame.gyro_z, prev_frame.gyro_z);
+                frame.accel_x = smooth(alpha_accel, frame.accel_x, prev_frame.accel_x);
+                frame.accel_y = smooth(alpha_accel, frame.accel_y, prev_frame.accel_y);
+                frame.accel_z = smooth(alpha_accel, frame.accel_z, prev_frame.accel_z);
+            }
+
             frame_state.prev_frame = Some(frame);
+
+            log::trace!("Sending DSUFrame over the channel: {frame:?}");
 
             if tx.send(frame).is_err() {
                 log::debug!("Receiver has hung up, reader thread exiting");

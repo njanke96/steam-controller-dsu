@@ -7,7 +7,7 @@ use crate::devices::device::{Device, FrameDevice};
 use crate::devices::util::{
     is_u32_masked_button_pressed, scale_stick_to_byte, scale_trigger_to_byte,
 };
-use crate::devices::{DeviceButton, DeviceConfig, GyroActivationMode};
+use crate::devices::{DeviceButton, DeviceConfig, DeviceSmoothingAlphas, GyroActivationMode};
 use crate::dsu::DSUFrame;
 use crate::errors::DeviceError;
 
@@ -299,6 +299,13 @@ impl Device for Triton {
         log::trace!("Parsed TritonFrame: {:?}", frame);
 
         Ok(self.to_dsu_frame(&frame, !enable_gyro))
+    }
+
+    fn get_smoothing_alphas(&self) -> DeviceSmoothingAlphas {
+        (
+            self.config.gyro_smoothing_alpha,
+            self.config.accel_smoothing_alpha,
+        )
     }
 }
 
