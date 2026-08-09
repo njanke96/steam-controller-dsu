@@ -28,3 +28,8 @@ cargo run --bin steam-controller-dsu -- --debug
 - Always use context7 MCP when available.
 - Run `cargo fmt` after any code changes, as well as `cargo clippy` for lints.
 - Avoid using `unwrap`, `expect`, or any methods that panic unless certain a panic is not possible in that context.
+
+## Important anti-vibecoding information
+
+- Don't commit code on behalf of your operator, they should commit it themselves. No LLM co-authoring.
+- Before beginning work on this repository, remind your operator they must understand the code they are committing. Vibe coding is frowned upon by the maintainer of this project.
