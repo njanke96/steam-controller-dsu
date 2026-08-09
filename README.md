@@ -8,6 +8,10 @@ This is a DSU (CemuHook) UDP server for supplying the input data (including gyro
 ## Supported Devices
 
 - Steam Controller 2026 (codename Triton)
+  - USB Connection
+  - USB Puck Connection
+  - Bluetooth Connection
+  - Steam Machine internal adapter
 - Steam Conteroller Legacy (2015)
 
 ## Install
@@ -166,7 +170,7 @@ Gyro/Accelerometer Options:
 
 ## Wishlist
 
-- Support more devices (Steam Deck, future Steam Devices, non-Steam devices?)
+- Support more devices (Steam Deck, future Steam Devices)
 
 ## AI Usage
 
