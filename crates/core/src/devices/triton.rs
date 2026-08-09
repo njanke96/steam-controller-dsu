@@ -16,6 +16,7 @@ const VID: u16 = 0x28de;
 const PID_WIRED: u16 = 0x1302;
 const PID_BT: u16 = 0x1303;
 const PID_PUCK: u16 = 0x1304;
+const PID_INTERNALADAPTER: u16 = 0x1305;
 
 /// HID usage page for the vendor-defined gamepad interface.
 const USAGE_PAGE_VENDOR_MIN: u16 = 0xFF00;
@@ -168,6 +169,7 @@ pub enum ConnectionMode {
     Usb,
     UsbPuck,
     Bluetooth,
+    InternalAdapter,
 }
 
 /// Triton (Steam Controller 2026) device
@@ -198,6 +200,7 @@ impl Triton {
                 d.vendor_id() == VID
                     && d.usage_page() >= USAGE_PAGE_VENDOR_MIN
                     && (d.product_id() == PID_PUCK
+                        || d.product_id() == PID_INTERNALADAPTER
                         || d.product_id() == PID_WIRED
                         || d.product_id() == PID_BT)
             })
@@ -442,6 +445,7 @@ fn connection_mode_from_pid(pid: u16) -> ConnectionMode {
         PID_BT => ConnectionMode::Bluetooth,
         PID_WIRED => ConnectionMode::Usb,
         PID_PUCK => ConnectionMode::UsbPuck,
+        PID_INTERNALADAPTER => ConnectionMode::InternalAdapter,
 
         // todo: this is stupid
         _ => ConnectionMode::Usb,
