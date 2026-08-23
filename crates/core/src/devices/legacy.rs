@@ -105,8 +105,8 @@ impl LegacyFrame {
             buttons,
             trigger_left: data[11],
             trigger_right: data[12],
-            left_stick_x: i16::from_le_bytes([data[54], data[55]]),
-            left_stick_y: i16::from_le_bytes([data[56], data[57]]),
+            left_stick_x: i16::from_le_bytes([data[16], data[17]]),
+            left_stick_y: i16::from_le_bytes([data[18], data[19]]),
             right_pad_x: i16::from_le_bytes([data[20], data[21]]),
             right_pad_y: i16::from_le_bytes([data[22], data[23]]),
             imu_timestamp: u32::from_le_bytes([data[4], data[5], data[6], data[7]]),
@@ -461,6 +461,10 @@ mod tests {
         data[10] = 0x08;
         data[11] = 0x40;
         data[12] = 0x20;
+        data[16] = 0x01;
+        data[17] = 0x02;
+        data[18] = 0x03;
+        data[19] = 0x04;
         data[20] = 0x34;
         data[21] = 0x12;
         data[22] = 0x78;
@@ -477,15 +481,12 @@ mod tests {
         data[37] = 0xAA;
         data[38] = 0xBB;
         data[39] = 0xCC;
-        data[54] = 0x01;
-        data[55] = 0x02;
-        data[56] = 0x03;
-        data[57] = 0x04;
 
         let frame = LegacyFrame::parse(&data).expect("frame");
         assert_eq!(frame.trigger_left, 0x40);
         assert_eq!(frame.trigger_right, 0x20);
         assert_eq!(frame.left_stick_x, i16::from_le_bytes([0x01, 0x02]));
+        assert_eq!(frame.left_stick_y, i16::from_le_bytes([0x03, 0x04]));
         assert_eq!(frame.right_pad_x, i16::from_le_bytes([0x34, 0x12]));
         assert!(frame.left_pad_touch);
     }
