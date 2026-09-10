@@ -18,16 +18,24 @@ const PID_WIRELESS: u16 = 0x1142;
 
 const USAGE_PAGE_VENDOR_MIN: u16 = 0xFF00;
 
-const FEATURE_REPORT_ID: u8 = 0x01;
-const FEATURE_REPORT_SIZE: usize = 64;
+const FEATURE_REPORT_SIZE: usize = 65;
 const SEND_FEATURE_REPORT_SLEEP_DURATION: Duration = Duration::from_millis(50);
+const FEATURE_REPORT_RETRY_ATTEMPTS: usize = 50;
+const FEATURE_REPORT_RETRY_SLEEP_DURATION: Duration = Duration::from_micros(500);
+
+const CMD_CLEAR_DIGITAL_MAPPINGS: u8 = 0x81;
+const CMD_SET_DEFAULT_DIGITAL_MAPPINGS: u8 = 0x85;
 const CMD_SET_SETTINGS_VALUES: u8 = 0x87;
+const CMD_LOAD_DEFAULT_SETTINGS: u8 = 0x8E;
 
-const SETTING_LIZARD_MODE: u8 = 9;
+const SETTING_LEFT_TRACKPAD_MODE: u8 = 7;
+const SETTING_RIGHT_TRACKPAD_MODE: u8 = 8;
 const SETTING_IMU_MODE: u8 = 48;
+const SETTING_WIRELESS_PACKET_VERSION: u8 = 49;
 
-const LIZARD_MODE_OFF: u16 = 0;
-const LIZARD_MODE_ON: u16 = 1;
+const TRACKPAD_ABSOLUTE_MOUSE: u16 = 0;
+const TRACKPAD_NONE: u16 = 7;
+const WIRELESS_PACKET_VERSION_2: u16 = 2;
 const IMU_MODE_SEND_RAW_ACCEL: u16 = 0x08;
 const IMU_MODE_SEND_RAW_GYRO: u16 = 0x10;
 const IMU_MODE_GYRO_ACCEL: u16 = IMU_MODE_SEND_RAW_ACCEL | IMU_MODE_SEND_RAW_GYRO;
@@ -223,9 +231,27 @@ impl LegacySteamController {
     }
 
     fn initialize_impl(&self) -> Result<(), DeviceError> {
-        send_setting(&self.hid, SETTING_LIZARD_MODE, LIZARD_MODE_OFF)?;
+        log::debug!("Sending IMU enable sequence... ");
+
+        send_command(&self.hid, CMD_CLEAR_DIGITAL_MAPPINGS)?;
         std::thread::sleep(SEND_FEATURE_REPORT_SLEEP_DURATION);
-        send_setting(&self.hid, SETTING_IMU_MODE, IMU_MODE_GYRO_ACCEL)?;
+        send_command(&self.hid, CMD_LOAD_DEFAULT_SETTINGS)?;
+        std::thread::sleep(SEND_FEATURE_REPORT_SLEEP_DURATION);
+
+        send_settings(
+            &self.hid,
+            &[
+                (SETTING_WIRELESS_PACKET_VERSION, WIRELESS_PACKET_VERSION_2),
+                (SETTING_LEFT_TRACKPAD_MODE, TRACKPAD_NONE),
+                (SETTING_RIGHT_TRACKPAD_MODE, TRACKPAD_NONE),
+            ],
+        )?;
+
+        std::thread::sleep(SEND_FEATURE_REPORT_SLEEP_DURATION);
+
+        send_settings(&self.hid, &[(SETTING_IMU_MODE, IMU_MODE_GYRO_ACCEL)])?;
+
+        log::debug!("IMU enable sequence complete");
         Ok(())
     }
 
@@ -408,25 +434,64 @@ impl Device for LegacySteamController {
 
 impl Drop for LegacySteamController {
     fn drop(&mut self) {
-        if !self.config.no_enable_lizard_mode_on_close
-            && send_setting(&self.hid, SETTING_LIZARD_MODE, LIZARD_MODE_ON).is_ok()
+        if self.config.no_enable_lizard_mode_on_close {
+            return;
+        }
+
+        if send_command(&self.hid, CMD_SET_DEFAULT_DIGITAL_MAPPINGS).is_ok()
+            && send_command(&self.hid, CMD_LOAD_DEFAULT_SETTINGS).is_ok()
+            && send_settings(
+                &self.hid,
+                &[(SETTING_RIGHT_TRACKPAD_MODE, TRACKPAD_ABSOLUTE_MOUSE)],
+            )
+            .is_ok()
         {
             log::debug!("Re-enabled lizard mode on legacy controller");
         }
     }
 }
 
-fn send_setting(hid: &HidDevice, setting: u8, value: u16) -> Result<(), DeviceError> {
-    let mut buf = [0u8; FEATURE_REPORT_SIZE];
-    buf[0] = FEATURE_REPORT_ID;
-    buf[1] = CMD_SET_SETTINGS_VALUES;
-    buf[2] = 3;
-    buf[3] = setting;
-    buf[4] = (value & 0xFF) as u8;
-    buf[5] = ((value >> 8) & 0xFF) as u8;
+fn send_feature_report_with_retries(
+    hid: &HidDevice,
+    buf: &[u8; FEATURE_REPORT_SIZE],
+) -> Result<(), DeviceError> {
+    let mut result = Ok(());
 
-    hid.send_feature_report(&buf)?;
+    // "Sometimes the wireless controller fails with EPIPE.
+    // Doing HID_REQ_SET_REPORT and waiting for a while seems to fix that."
+    for _ in 0..FEATURE_REPORT_RETRY_ATTEMPTS {
+        result = hid.send_feature_report(buf);
+        if result.is_ok() {
+            return Ok(());
+        }
+
+        std::thread::sleep(FEATURE_REPORT_RETRY_SLEEP_DURATION);
+    }
+    result?;
     Ok(())
+}
+
+fn send_command(hid: &HidDevice, cmd: u8) -> Result<(), DeviceError> {
+    let mut buf = [0u8; FEATURE_REPORT_SIZE];
+    buf[0] = 0x00;
+    buf[1] = cmd;
+    send_feature_report_with_retries(hid, &buf)
+}
+
+fn send_settings(hid: &HidDevice, settings: &[(u8, u16)]) -> Result<(), DeviceError> {
+    let mut buf = [0u8; FEATURE_REPORT_SIZE];
+
+    buf[0] = 0x00;
+    buf[1] = CMD_SET_SETTINGS_VALUES;
+    buf[2] = (settings.len() * 3) as u8;
+
+    for (i, &(setting, value)) in settings.iter().enumerate() {
+        buf[3 + i * 3] = setting;
+        buf[4 + i * 3] = (value & 0xFF) as u8;
+        buf[5 + i * 3] = ((value >> 8) & 0xFF) as u8;
+    }
+
+    send_feature_report_with_retries(hid, &buf)
 }
 
 fn connection_mode_from_pid(pid: u16) -> ConnectionMode {
@@ -437,15 +502,7 @@ fn connection_mode_from_pid(pid: u16) -> ConnectionMode {
 }
 
 fn probe_device(hid: &HidDevice) -> Result<(), DeviceError> {
-    let mut probe = [0u8; FEATURE_REPORT_SIZE];
-    probe[0] = FEATURE_REPORT_ID;
-    probe[1] = CMD_SET_SETTINGS_VALUES;
-    probe[2] = 3;
-    probe[3] = SETTING_LIZARD_MODE;
-    probe[4] = 0;
-    probe[5] = 0;
-    hid.send_feature_report(&probe)?;
-    Ok(())
+    send_command(hid, CMD_CLEAR_DIGITAL_MAPPINGS)
 }
 
 #[cfg(test)]
