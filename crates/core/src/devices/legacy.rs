@@ -18,6 +18,7 @@ const PID_WIRELESS: u16 = 0x1142;
 
 const USAGE_PAGE_VENDOR_MIN: u16 = 0xFF00;
 
+const FEATURE_REPORT_ID: u8 = 0x00;
 const FEATURE_REPORT_SIZE: usize = 65;
 const SEND_FEATURE_REPORT_SLEEP_DURATION: Duration = Duration::from_millis(50);
 const FEATURE_REPORT_RETRY_ATTEMPTS: usize = 50;
@@ -473,7 +474,7 @@ fn send_feature_report_with_retries(
 
 fn send_command(hid: &HidDevice, cmd: u8) -> Result<(), DeviceError> {
     let mut buf = [0u8; FEATURE_REPORT_SIZE];
-    buf[0] = 0x00;
+    buf[0] = FEATURE_REPORT_ID;
     buf[1] = cmd;
     send_feature_report_with_retries(hid, &buf)
 }
@@ -481,7 +482,7 @@ fn send_command(hid: &HidDevice, cmd: u8) -> Result<(), DeviceError> {
 fn send_settings(hid: &HidDevice, settings: &[(u8, u16)]) -> Result<(), DeviceError> {
     let mut buf = [0u8; FEATURE_REPORT_SIZE];
 
-    buf[0] = 0x00;
+    buf[0] = FEATURE_REPORT_ID;
     buf[1] = CMD_SET_SETTINGS_VALUES;
     buf[2] = (settings.len() * 3) as u8;
 
