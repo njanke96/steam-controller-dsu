@@ -13,6 +13,9 @@ This is a DSU (CemuHook) UDP server for supplying the input data (including gyro
   - Bluetooth Connection
   - Steam Machine internal adapter
 - Steam Conteroller Legacy (2015)
+  - ⚠️ There are currently many [issues](https://github.com/njanke96/steam-controller-dsu/issues?q=is%3Aissue%20label%3A%22device%3A%20legacy%22)
+  - USB Connection
+  - USB Dongle Connection
 
 ## Install
 
@@ -174,5 +177,5 @@ Gyro/Accelerometer Options:
 
 ## AI Usage
 
-AI assistance from open models (Kimi K2.6, GLM-5) is used in the development of this application. AI is used for quick research and prototyping of new features and boilerplate, not for 
+AI assistance from open models (Kimi K3 mostly) is used in the development of this application. AI is used for quick research and prototyping of new features and boilerplate, not for 
 architectural decisions or complex logic. No generated code is currently used in the project without complete understanding by the human involved.
