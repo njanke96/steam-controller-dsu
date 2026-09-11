@@ -46,32 +46,36 @@ const READ_TIMEOUT_MILLIS: i32 = 100;
 
 const ACCEL_PER_G: f32 = 16384.0;
 const GYRO_PER_DPS: f32 = 16.384;
-const ANALOG_TRIGGER_TO_DIGITAL_THRESHOLD: u8 = 228;
 
-const MASK_A: u64 = 0x0000_0000_0000_0080;
-const MASK_B: u64 = 0x0000_0000_0000_0020;
-const MASK_X: u64 = 0x0000_0000_0000_0040;
-const MASK_Y: u64 = 0x0000_0000_0000_0010;
-const MASK_RIGHT_BUMPER: u64 = 0x0000_0000_0000_0004;
-const MASK_LEFT_BUMPER: u64 = 0x0000_0000_0000_0008;
-const MASK_DPAD_UP: u64 = 0x0000_0000_0000_0100;
-const MASK_DPAD_RIGHT: u64 = 0x0000_0000_0000_0200;
-const MASK_DPAD_LEFT: u64 = 0x0000_0000_0000_0400;
-const MASK_DPAD_DOWN: u64 = 0x0000_0000_0000_0800;
-const MASK_SELECT: u64 = 0x0000_0000_0000_1000;
-const MASK_GUIDE: u64 = 0x0000_0000_0000_2000;
-const MASK_START: u64 = 0x0000_0000_0000_4000;
-const MASK_LEFT_GRIP: u64 = 0x0000_0000_0000_8000;
-const MASK_RIGHT_GRIP: u64 = 0x0000_0000_0001_0000;
-const MASK_RIGHT_PAD_CLICKED: u64 = 0x0000_0000_0004_0000;
-const MASK_LEFT_PAD_TOUCH: u64 = 0x0000_0000_0008_0000;
-const MASK_RIGHT_PAD_TOUCH: u64 = 0x0000_0000_0010_0000;
-const MASK_LEFT_STICK_CLICK: u64 = 0x0000_0000_0040_0000;
-const MASK_LEFT_PAD_AND_JOYSTICK: u64 = 0x0000_0000_0080_0000;
+// fully pressed trigger buttons
+const MASK_TR2: u32 = 1;
+const MASK_TL2: u32 = 1 << 1;
+
+// other buttons
+const MASK_A: u32 = 1 << 7;
+const MASK_B: u32 = 1 << 5;
+const MASK_X: u32 = 1 << 6;
+const MASK_Y: u32 = 1 << 4;
+const MASK_RIGHT_BUMPER: u32 = 1 << 2;
+const MASK_LEFT_BUMPER: u32 = 1 << 3;
+const MASK_DPAD_UP: u32 = 1 << 8;
+const MASK_DPAD_RIGHT: u32 = 1 << 9;
+const MASK_DPAD_LEFT: u32 = 1 << 10;
+const MASK_DPAD_DOWN: u32 = 1 << 11;
+const MASK_SELECT: u32 = 1 << 12;
+const MASK_GUIDE: u32 = 1 << 13;
+const MASK_START: u32 = 1 << 14;
+const MASK_LEFT_GRIP: u32 = 1 << 15;
+const MASK_RIGHT_GRIP: u32 = 1 << 16;
+// const MASK_LEFT_PAD_CLICKED: u32 = 1 << 17;
+const MASK_RIGHT_PAD_CLICKED: u32 = 1 << 18;
+const MASK_LEFT_PAD_TOUCH: u32 = 1 << 19;
+const MASK_RIGHT_PAD_TOUCH: u32 = 1 << 20;
+const MASK_LEFT_STICK_CLICK: u32 = 1 << 22;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct LegacyFrame {
-    buttons: u64,
+    buttons: u32,
     trigger_left: u8,
     trigger_right: u8,
     left_stick_x: i16,
@@ -108,7 +112,7 @@ impl LegacyFrame {
             return None;
         }
 
-        let buttons = u64::from_le_bytes([data[8], data[9], data[10], 0, 0, 0, 0, 0]);
+        let buttons = u32::from_le_bytes([data[8], data[9], data[10], 0]);
 
         Some(Self {
             buttons,
@@ -125,27 +129,12 @@ impl LegacyFrame {
             gyro_x: i16::from_le_bytes([data[34], data[35]]),
             gyro_y: i16::from_le_bytes([data[36], data[37]]),
             gyro_z: i16::from_le_bytes([data[38], data[39]]),
-            left_pad_touch: is_u32_masked_button_pressed(
-                buttons as u32,
-                MASK_LEFT_PAD_TOUCH as u32,
-            ) || is_u32_masked_button_pressed(
-                buttons as u32,
-                MASK_LEFT_PAD_AND_JOYSTICK as u32,
-            ),
-            right_pad_touch: is_u32_masked_button_pressed(
-                buttons as u32,
-                MASK_RIGHT_PAD_TOUCH as u32,
-            ),
-            left_stick_click: is_u32_masked_button_pressed(
-                buttons as u32,
-                MASK_LEFT_STICK_CLICK as u32,
-            ),
-            right_pad_click: is_u32_masked_button_pressed(
-                buttons as u32,
-                MASK_RIGHT_PAD_CLICKED as u32,
-            ),
-            left_grip: is_u32_masked_button_pressed(buttons as u32, MASK_LEFT_GRIP as u32),
-            right_grip: is_u32_masked_button_pressed(buttons as u32, MASK_RIGHT_GRIP as u32),
+            left_pad_touch: is_u32_masked_button_pressed(buttons, MASK_LEFT_PAD_TOUCH),
+            right_pad_touch: is_u32_masked_button_pressed(buttons, MASK_RIGHT_PAD_TOUCH),
+            left_stick_click: is_u32_masked_button_pressed(buttons, MASK_LEFT_STICK_CLICK),
+            right_pad_click: is_u32_masked_button_pressed(buttons, MASK_RIGHT_PAD_CLICKED),
+            left_grip: is_u32_masked_button_pressed(buttons, MASK_LEFT_GRIP),
+            right_grip: is_u32_masked_button_pressed(buttons, MASK_RIGHT_GRIP),
         })
     }
 }
@@ -281,24 +270,24 @@ impl LegacySteamController {
         };
 
         DSUFrame {
-            dpad_left: is_u32_masked_button_pressed(frame.buttons as u32, MASK_DPAD_LEFT as u32),
-            dpad_down: is_u32_masked_button_pressed(frame.buttons as u32, MASK_DPAD_DOWN as u32),
-            dpad_right: is_u32_masked_button_pressed(frame.buttons as u32, MASK_DPAD_RIGHT as u32),
-            dpad_up: is_u32_masked_button_pressed(frame.buttons as u32, MASK_DPAD_UP as u32),
-            options: is_u32_masked_button_pressed(frame.buttons as u32, MASK_START as u32),
+            dpad_left: is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_LEFT),
+            dpad_down: is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_DOWN),
+            dpad_right: is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_RIGHT),
+            dpad_up: is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_UP),
+            options: is_u32_masked_button_pressed(frame.buttons, MASK_START),
             r3: frame.right_pad_click,
             l3: frame.left_stick_click,
-            share: is_u32_masked_button_pressed(frame.buttons as u32, MASK_SELECT as u32),
-            y: is_u32_masked_button_pressed(frame.buttons as u32, MASK_Y as u32),
-            b: is_u32_masked_button_pressed(frame.buttons as u32, MASK_B as u32),
-            a: is_u32_masked_button_pressed(frame.buttons as u32, MASK_A as u32),
-            x: is_u32_masked_button_pressed(frame.buttons as u32, MASK_X as u32),
-            r1: is_u32_masked_button_pressed(frame.buttons as u32, MASK_RIGHT_BUMPER as u32),
-            l1: is_u32_masked_button_pressed(frame.buttons as u32, MASK_LEFT_BUMPER as u32),
-            r2: r2 >= ANALOG_TRIGGER_TO_DIGITAL_THRESHOLD,
-            l2: l2 >= ANALOG_TRIGGER_TO_DIGITAL_THRESHOLD,
-            home: is_u32_masked_button_pressed(frame.buttons as u32, MASK_GUIDE as u32),
-            touch: frame.left_pad_touch || frame.right_pad_touch,
+            share: is_u32_masked_button_pressed(frame.buttons, MASK_SELECT),
+            y: is_u32_masked_button_pressed(frame.buttons, MASK_Y),
+            b: is_u32_masked_button_pressed(frame.buttons, MASK_B),
+            a: is_u32_masked_button_pressed(frame.buttons, MASK_A),
+            x: is_u32_masked_button_pressed(frame.buttons, MASK_X),
+            r1: is_u32_masked_button_pressed(frame.buttons, MASK_RIGHT_BUMPER),
+            l1: is_u32_masked_button_pressed(frame.buttons, MASK_LEFT_BUMPER),
+            r2: is_u32_masked_button_pressed(frame.buttons, MASK_TR2),
+            l2: is_u32_masked_button_pressed(frame.buttons, MASK_TL2),
+            home: is_u32_masked_button_pressed(frame.buttons, MASK_GUIDE),
+            touch: false,
             left_stick_x: scale_stick_to_byte(frame.left_stick_x),
             left_stick_y: scale_stick_to_byte(frame.left_stick_y),
             right_stick_x: scale_stick_to_byte(frame.right_pad_x),
@@ -324,48 +313,22 @@ impl LegacySteamController {
 
     fn is_device_button_pressed_impl(&self, button: &DeviceButton, frame: &LegacyFrame) -> bool {
         match button {
-            DeviceButton::DpadLeft => {
-                is_u32_masked_button_pressed(frame.buttons as u32, MASK_DPAD_LEFT as u32)
-            }
-            DeviceButton::DpadDown => {
-                is_u32_masked_button_pressed(frame.buttons as u32, MASK_DPAD_DOWN as u32)
-            }
-            DeviceButton::DpadRight => {
-                is_u32_masked_button_pressed(frame.buttons as u32, MASK_DPAD_RIGHT as u32)
-            }
-            DeviceButton::DpadUp => {
-                is_u32_masked_button_pressed(frame.buttons as u32, MASK_DPAD_UP as u32)
-            }
-            DeviceButton::Start => {
-                is_u32_masked_button_pressed(frame.buttons as u32, MASK_START as u32)
-            }
-            DeviceButton::Select => {
-                is_u32_masked_button_pressed(frame.buttons as u32, MASK_SELECT as u32)
-            }
-            DeviceButton::Guide => {
-                is_u32_masked_button_pressed(frame.buttons as u32, MASK_GUIDE as u32)
-            }
+            DeviceButton::DpadLeft => is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_LEFT),
+            DeviceButton::DpadDown => is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_DOWN),
+            DeviceButton::DpadRight => is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_RIGHT),
+            DeviceButton::DpadUp => is_u32_masked_button_pressed(frame.buttons, MASK_DPAD_UP),
+            DeviceButton::Start => is_u32_masked_button_pressed(frame.buttons, MASK_START),
+            DeviceButton::Select => is_u32_masked_button_pressed(frame.buttons, MASK_SELECT),
+            DeviceButton::Guide => is_u32_masked_button_pressed(frame.buttons, MASK_GUIDE),
             DeviceButton::Quaternary => false,
-            DeviceButton::A => is_u32_masked_button_pressed(frame.buttons as u32, MASK_A as u32),
-            DeviceButton::B => is_u32_masked_button_pressed(frame.buttons as u32, MASK_B as u32),
-            DeviceButton::X => is_u32_masked_button_pressed(frame.buttons as u32, MASK_X as u32),
-            DeviceButton::Y => is_u32_masked_button_pressed(frame.buttons as u32, MASK_Y as u32),
-            DeviceButton::L1 => {
-                is_u32_masked_button_pressed(frame.buttons as u32, MASK_LEFT_BUMPER as u32)
-            }
-            DeviceButton::R1 => {
-                is_u32_masked_button_pressed(frame.buttons as u32, MASK_RIGHT_BUMPER as u32)
-            }
-            DeviceButton::L2 => {
-                scale_trigger_to_byte(
-                    ((frame.trigger_left as u16) << 7 | frame.trigger_left as u16) as i16,
-                ) >= ANALOG_TRIGGER_TO_DIGITAL_THRESHOLD
-            }
-            DeviceButton::R2 => {
-                scale_trigger_to_byte(
-                    ((frame.trigger_right as u16) << 7 | frame.trigger_right as u16) as i16,
-                ) >= ANALOG_TRIGGER_TO_DIGITAL_THRESHOLD
-            }
+            DeviceButton::A => is_u32_masked_button_pressed(frame.buttons, MASK_A),
+            DeviceButton::B => is_u32_masked_button_pressed(frame.buttons, MASK_B),
+            DeviceButton::X => is_u32_masked_button_pressed(frame.buttons, MASK_X),
+            DeviceButton::Y => is_u32_masked_button_pressed(frame.buttons, MASK_Y),
+            DeviceButton::L1 => is_u32_masked_button_pressed(frame.buttons, MASK_LEFT_BUMPER),
+            DeviceButton::R1 => is_u32_masked_button_pressed(frame.buttons, MASK_RIGHT_BUMPER),
+            DeviceButton::L2 => is_u32_masked_button_pressed(frame.buttons, MASK_TL2),
+            DeviceButton::R2 => is_u32_masked_button_pressed(frame.buttons, MASK_TR2),
             DeviceButton::L3 => frame.left_stick_click,
             DeviceButton::R3 => frame.right_pad_click,
             DeviceButton::L4 => false,
@@ -376,8 +339,8 @@ impl LegacySteamController {
             DeviceButton::RightStickTouch => false,
             DeviceButton::LeftPadTouch => frame.left_pad_touch,
             DeviceButton::RightPadTouch => frame.right_pad_touch,
-            DeviceButton::LeftGrip => false,
-            DeviceButton::RightGrip => false,
+            DeviceButton::LeftGrip => is_u32_masked_button_pressed(frame.buttons, MASK_LEFT_GRIP),
+            DeviceButton::RightGrip => is_u32_masked_button_pressed(frame.buttons, MASK_RIGHT_GRIP),
             DeviceButton::Unknown => false,
         }
     }
