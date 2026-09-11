@@ -13,7 +13,6 @@ This is a DSU (CemuHook) UDP server for supplying the input data (including gyro
   - Bluetooth Connection
   - Steam Machine internal adapter
 - Steam Conteroller Legacy (2015)
-  - ⚠️ There are currently many [issues](https://github.com/njanke96/steam-controller-dsu/issues?q=is%3Aissue%20label%3A%22device%3A%20legacy%22)
   - USB Connection
   - USB Dongle Connection
 
