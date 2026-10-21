@@ -1,5 +1,53 @@
 //! Provides functionality for working with DSU protocol data.
 
+// TODO before commit: clean up magic numbers, public constants for packet lengths
+
+const PROTOCOL_VERSION: u16 = 1001;
+
+const VERSION_TYPE: u32 = 0x100000;
+const INFO_TYPE: u32 = 0x100001;
+const DATA_TYPE: u32 = 0x100002;
+const RUMBLE_INFO_TYPE: u32 = 0x110001;
+const RUMBLE_MOTOR_TYPE: u32 = 0x110002;
+const UNKNOWN_MESSAGE_TYPE: u32 = 0xFFFFFF;
+
+/// DSU Message Types
+#[derive(Debug, Clone)]
+pub enum DSUMessageType {
+    Version,
+    Info,
+    Data,
+    RumbleInfo,
+    RumbleMotor,
+    Unknown,
+}
+
+impl From<u32> for DSUMessageType {
+    fn from(value: u32) -> Self {
+        match value {
+            VERSION_TYPE => DSUMessageType::Version,
+            INFO_TYPE => DSUMessageType::Info,
+            DATA_TYPE => DSUMessageType::Data,
+            RUMBLE_INFO_TYPE => DSUMessageType::RumbleInfo,
+            RUMBLE_MOTOR_TYPE => DSUMessageType::RumbleMotor,
+            _ => DSUMessageType::Unknown,
+        }
+    }
+}
+
+impl From<DSUMessageType> for u32 {
+    fn from(value: DSUMessageType) -> Self {
+        match value {
+            DSUMessageType::Version => VERSION_TYPE,
+            DSUMessageType::Info => INFO_TYPE,
+            DSUMessageType::Data => DATA_TYPE,
+            DSUMessageType::RumbleInfo => RUMBLE_INFO_TYPE,
+            DSUMessageType::RumbleMotor => RUMBLE_MOTOR_TYPE,
+            DSUMessageType::Unknown => UNKNOWN_MESSAGE_TYPE,
+        }
+    }
+}
+
 /// DSU frame representing all controller data sent over the CemuHook protocol.
 /// DSU protocol reference can be found [`here`](https://v1993.github.io/cemuhook-protocol/).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -49,7 +97,7 @@ pub struct DSUFrame {
 /// filling the payload.
 fn write_header(buf: &mut [u8], payload_len: u16, client_id: u32) {
     buf[0..4].copy_from_slice(b"DSUS");
-    buf[4..6].copy_from_slice(&1001u16.to_le_bytes());
+    buf[4..6].copy_from_slice(&PROTOCOL_VERSION.to_le_bytes());
     buf[6..8].copy_from_slice(&payload_len.to_le_bytes());
     buf[8..12].fill(0); // crc32 placeholder
     buf[12..16].copy_from_slice(&client_id.to_le_bytes());
@@ -75,9 +123,11 @@ fn crc32(data: &[u8]) -> u32 {
 /// Build a CemuHook protocol-version response packet into `buf`.
 /// `buf` must be at least 22 bytes.
 pub fn write_version_response(buf: &mut [u8], client_id: u32) {
+    let message_type: u32 = DSUMessageType::Version.into();
+
     write_header(buf, 2, client_id);
-    buf[16..20].copy_from_slice(&0x100000u32.to_le_bytes());
-    buf[20..22].copy_from_slice(&1001u16.to_le_bytes());
+    buf[16..20].copy_from_slice(&message_type.to_le_bytes());
+    buf[20..22].copy_from_slice(&PROTOCOL_VERSION.to_le_bytes());
 
     let c = crc32(&buf[..22]);
     buf[8..12].copy_from_slice(&c.to_le_bytes());
@@ -86,9 +136,11 @@ pub fn write_version_response(buf: &mut [u8], client_id: u32) {
 /// Build a CemuHook controller-info response packet into `buf`.
 /// `buf` must be at least 32 bytes.
 pub fn write_info_response(buf: &mut [u8], slot: u8, client_id: u32, connected: bool) {
+    let message_type: u32 = DSUMessageType::Info.into();
+
     buf.fill(0);
     write_header(buf, 16, client_id); // payload length = 32 - 16
-    buf[16..20].copy_from_slice(&0x100001u32.to_le_bytes());
+    buf[16..20].copy_from_slice(&message_type.to_le_bytes());
 
     // SharedResponse
     buf[20] = slot;
@@ -97,7 +149,30 @@ pub fn write_info_response(buf: &mut [u8], slot: u8, client_id: u32, connected: 
         buf[22] = 2; // deviceModel = full gyro
         buf[23] = 1; // connection = USB
     }
-    // Info response: byte 31 is a zero byte (not a connected flag).
+
+    let c = crc32(&buf[..32]);
+    buf[8..12].copy_from_slice(&c.to_le_bytes());
+}
+
+pub fn write_rumble_info_response(buf: &mut [u8], slot: u8, client_id: u32, connected: bool) {
+    let message_type: u32 = DSUMessageType::RumbleInfo.into();
+
+    buf.fill(0);
+    write_header(buf, 16, client_id); // payload length = 32 - 16
+    buf[16..20].copy_from_slice(&message_type.to_le_bytes());
+
+    // SharedResponse TODO: move all shared response writes into a function, remove any connected bools
+    buf[20] = slot;
+    if connected {
+        buf[21] = 2; // slotState = connected
+        buf[22] = 2; // deviceModel = full gyro
+        buf[23] = 1; // connection = USB
+    }
+
+    // Motor count
+    // Single motor support for all devices
+    // This might change in the future, idk
+    buf[31] = 1;
 
     let c = crc32(&buf[..32]);
     buf[8..12].copy_from_slice(&c.to_le_bytes());
@@ -113,10 +188,11 @@ pub fn write_data_event(
     timestamp_us: u64,
     invert_pitch: bool,
 ) {
-    buf.fill(0);
+    let message_type: u32 = DSUMessageType::Data.into();
 
+    buf.fill(0);
     write_header(buf, 84, client_id); // 100 - 16 = 84
-    buf[16..20].copy_from_slice(&0x100002u32.to_le_bytes());
+    buf[16..20].copy_from_slice(&message_type.to_le_bytes());
 
     // SharedResponse (11 bytes, offset 20)
     buf[20] = slot; // slot requested by client
@@ -294,6 +370,29 @@ mod tests {
         assert_eq!(buf[21], 0);
         assert_eq!(buf[22], 0);
         assert_eq!(buf[23], 0);
+    }
+
+    #[test]
+    fn test_write_rumble_info_response_connected() {
+        let mut buf = [0u8; 32];
+        write_rumble_info_response(&mut buf, 1, 0xABCD_EF01, true);
+
+        assert_eq!(&buf[0..4], b"DSUS");
+        assert_eq!(u16::from_le_bytes([buf[4], buf[5]]), 1001);
+        assert_eq!(u16::from_le_bytes([buf[6], buf[7]]), 16);
+        assert_eq!(
+            u32::from_le_bytes([buf[12], buf[13], buf[14], buf[15]]),
+            0xABCD_EF01
+        );
+        assert_eq!(
+            u32::from_le_bytes([buf[16], buf[17], buf[18], buf[19]]),
+            0x110001
+        );
+        assert_eq!(buf[20], 1);
+        assert_eq!(buf[21], 2);
+        assert_eq!(buf[22], 2);
+        assert_eq!(buf[23], 1);
+        assert_eq!(buf[31], 1);
     }
 
     fn create_test_frame() -> DSUFrame {

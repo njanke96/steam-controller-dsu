@@ -7,14 +7,11 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::dsu::DSUFrame;
+use crate::dsu::{DSUFrame, DSUMessageType};
 use crate::errors::ServerError;
 use crate::{READ_ATOMIC_BOOL_ORDERING, dsu};
 
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(5);
-const VERSION_TYPE: u32 = 0x100000;
-const INFO_TYPE: u32 = 0x100001;
-const DATA_TYPE: u32 = 0x100002;
 
 /// DSU server configuration.
 ///
@@ -177,18 +174,21 @@ impl Server {
 
         let client_id = u32::from_le_bytes([buf[12], buf[13], buf[14], buf[15]]);
         let event_type = u32::from_le_bytes([buf[16], buf[17], buf[18], buf[19]]);
+        let event_type = DSUMessageType::from(event_type);
 
         log::trace!(
-            "Received {} request from {} (id={})",
-            event_type_str(event_type),
+            "Received {:?} request from {} (id={})",
+            event_type,
             addr,
             client_id
         );
 
         match event_type {
-            VERSION_TYPE => handle_version_request(client_id, addr, socket),
-            INFO_TYPE => handle_info_request(buf, client_id, addr, socket, self.config.slot),
-            DATA_TYPE => handle_data_request(
+            DSUMessageType::Version => handle_version_request(client_id, addr, socket),
+            DSUMessageType::Info => {
+                handle_info_request(buf, client_id, addr, socket, self.config.slot)
+            }
+            DSUMessageType::Data => handle_data_request(
                 buf,
                 msg_len,
                 client_id,
@@ -196,8 +196,12 @@ impl Server {
                 &self.clients,
                 self.config.slot,
             ),
-            _ => {
-                log::trace!("Unhandled event type 0x{:06x} from {}", event_type, addr);
+            DSUMessageType::RumbleInfo => {
+                handle_rumble_info_request(buf, msg_len, client_id, addr, socket, self.config.slot)
+            }
+            DSUMessageType::RumbleMotor => todo!(),
+            DSUMessageType::Unknown => {
+                log::trace!("Unknown event type from {}", addr);
             }
         }
     }
@@ -293,6 +297,34 @@ fn handle_version_request(client_id: u32, addr: &SocketAddr, socket: &UdpSocket)
     }
 }
 
+fn handle_rumble_info_request(
+    buf: &[u8; 256],
+    msg_len: usize,
+    client_id: u32,
+    addr: &SocketAddr,
+    socket: &UdpSocket,
+    configured_slot: u8,
+) {
+    // Parse the slot (same beginning as handle_data_request)
+    let requested_slot = if msg_len > 21 { buf[21] } else { 0 };
+
+    if requested_slot != configured_slot {
+        log::trace!(
+            "Ignoring rumble info request from {} for slot {} (configured slot is {})",
+            addr,
+            requested_slot,
+            configured_slot
+        );
+        return;
+    }
+
+    let mut rumble_buf = [0u8; 32];
+    dsu::write_rumble_info_response(&mut rumble_buf, configured_slot, client_id, true);
+    if let Err(e) = socket.send_to(&rumble_buf, addr) {
+        log::warn!("Failed to send rumble info response to {}: {}", addr, e);
+    }
+}
+
 fn handle_info_request(
     buf: &[u8; 256],
     client_id: u32,
@@ -360,14 +392,5 @@ fn handle_data_request(
                 packet_counter: 0,
             });
         }
-    }
-}
-
-fn event_type_str(t: u32) -> &'static str {
-    match t {
-        VERSION_TYPE => "VERSION",
-        INFO_TYPE => "INFO",
-        DATA_TYPE => "DATA",
-        _ => "UNKNOWN",
     }
 }
