@@ -225,7 +225,7 @@ impl Server {
     }
 
     fn send_loop(context: SendThreadContext) {
-        let mut packet_buf = [0u8; 100];
+        let mut packet_buf = [0u8; dsu::DATA_MESSAGE_LEN];
         let mut timestamp_us: u64 = 0;
 
         loop {
@@ -290,38 +290,10 @@ impl Server {
 }
 
 fn handle_version_request(client_id: u32, addr: &SocketAddr, socket: &UdpSocket) {
-    let mut version_buf = [0u8; 22];
+    let mut version_buf = [0u8; dsu::VERSION_MESSAGE_LEN];
     dsu::write_version_response(&mut version_buf, client_id);
     if let Err(e) = socket.send_to(&version_buf, addr) {
         log::warn!("Failed to send version response to {}: {}", addr, e);
-    }
-}
-
-fn handle_rumble_info_request(
-    buf: &[u8; 256],
-    msg_len: usize,
-    client_id: u32,
-    addr: &SocketAddr,
-    socket: &UdpSocket,
-    configured_slot: u8,
-) {
-    // Parse the slot (same beginning as handle_data_request)
-    let requested_slot = if msg_len > 21 { buf[21] } else { 0 };
-
-    if requested_slot != configured_slot {
-        log::trace!(
-            "Ignoring rumble info request from {} for slot {} (configured slot is {})",
-            addr,
-            requested_slot,
-            configured_slot
-        );
-        return;
-    }
-
-    let mut rumble_buf = [0u8; 32];
-    dsu::write_rumble_info_response(&mut rumble_buf, configured_slot, client_id, true);
-    if let Err(e) = socket.send_to(&rumble_buf, addr) {
-        log::warn!("Failed to send rumble info response to {}: {}", addr, e);
     }
 }
 
@@ -332,7 +304,7 @@ fn handle_info_request(
     socket: &UdpSocket,
     configured_slot: u8,
 ) {
-    let mut info_buf = [0u8; 32];
+    let mut info_buf = [0u8; dsu::INFO_MESSAGE_LEN];
     // Parse requested slots.
     let port_cnt = i32::from_le_bytes([buf[20], buf[21], buf[22], buf[23]]) as usize;
     let requested = port_cnt.min(4);
@@ -392,5 +364,33 @@ fn handle_data_request(
                 packet_counter: 0,
             });
         }
+    }
+}
+
+fn handle_rumble_info_request(
+    buf: &[u8; 256],
+    msg_len: usize,
+    client_id: u32,
+    addr: &SocketAddr,
+    socket: &UdpSocket,
+    configured_slot: u8,
+) {
+    // Parse the slot (same beginning as handle_data_request)
+    let requested_slot = if msg_len > 21 { buf[21] } else { 0 };
+
+    if requested_slot != configured_slot {
+        log::trace!(
+            "Ignoring rumble info request from {} for slot {} (configured slot is {})",
+            addr,
+            requested_slot,
+            configured_slot
+        );
+        return;
+    }
+
+    let mut rumble_buf = [0u8; dsu::RUMBLE_INFO_MESSAGE_LEN];
+    dsu::write_rumble_info_response(&mut rumble_buf, configured_slot, client_id, true);
+    if let Err(e) = socket.send_to(&rumble_buf, addr) {
+        log::warn!("Failed to send rumble info response to {}: {}", addr, e);
     }
 }
