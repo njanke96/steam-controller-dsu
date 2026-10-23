@@ -176,5 +176,4 @@ Gyro/Accelerometer Options:
 
 ## AI Usage
 
-AI assistance from open models (Kimi K3 mostly) is used in the development of this application. AI is used for quick research and prototyping of new features and boilerplate, not for 
-architectural decisions or complex logic. No generated code is currently used in the project without complete understanding by the human involved.
+AI assistance from open models has been used in the early development of this application. No generated code is currently used in the project without complete understanding by the human involved.
