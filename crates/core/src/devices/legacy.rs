@@ -9,7 +9,7 @@ use crate::devices::util::{
 };
 use crate::devices::{DeviceButton, DeviceConfig, GyroActivationMode};
 use crate::devices::{DeviceSmoothingAlphas, FrameDevice};
-use crate::dsu::DSUFrame;
+use crate::dsu::{DSUFrame, RumbleCommand};
 use crate::errors::DeviceError;
 
 const VID: u16 = 0x28de;
@@ -393,6 +393,14 @@ impl Device for LegacySteamController {
             self.config.gyro_smoothing_alpha,
             self.config.accel_smoothing_alpha,
         )
+    }
+
+    fn rumble(&self, cmd: RumbleCommand) {
+        log::error!(
+            "Rumble requested on legacy device (motor_id={}, intensity={}) but not supported",
+            cmd.motor_id,
+            cmd.intensity
+        );
     }
 }
 

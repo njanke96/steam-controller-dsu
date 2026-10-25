@@ -1,7 +1,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use crate::dsu::DSUFrame;
+use crate::dsu::{DSUFrame, RumbleCommand};
 use crate::errors::DeviceError;
 
 /// Default alpha value for gyroscope smoothing
@@ -53,6 +53,9 @@ pub trait Device {
 
     /// Get the smoothing alphas for the device (gyro_alpha, accel_alpha)
     fn get_smoothing_alphas(&self) -> DeviceSmoothingAlphas;
+
+    /// Write a rumble command to the device.
+    fn rumble(&self, cmd: RumbleCommand);
 }
 
 impl<T> Device for Box<T>
@@ -69,6 +72,10 @@ where
 
     fn get_smoothing_alphas(&self) -> DeviceSmoothingAlphas {
         (**self).get_smoothing_alphas()
+    }
+
+    fn rumble(&self, cmd: RumbleCommand) {
+        (**self).rumble(cmd)
     }
 }
 
