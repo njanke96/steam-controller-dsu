@@ -3,6 +3,7 @@
 const PROTOCOL_VERSION: u16 = 1001;
 
 pub(crate) const HEADER_LEN: usize = 16;
+pub(crate) const HEADER_LEN_WITH_EVENT_TYPE: usize = 20;
 pub(crate) const VERSION_MESSAGE_LEN: usize = 22;
 pub(crate) const INFO_MESSAGE_LEN: usize = 32;
 pub(crate) const DATA_MESSAGE_LEN: usize = 100;
@@ -92,6 +93,12 @@ pub struct DSUFrame {
     pub gyro_x: f32,
     pub gyro_y: f32,
     pub gyro_z: f32,
+}
+
+#[derive(Debug, Clone)]
+pub struct RumbleCommand {
+    pub motor_id: u8,
+    pub intensity: u8,
 }
 
 /// Write the common CemuHook packet header into `buf`
@@ -413,7 +420,7 @@ mod tests {
         assert_eq!(buf[21], 2);
         assert_eq!(buf[22], 2);
         assert_eq!(buf[23], 1);
-        assert_eq!(buf[31], 1);
+        assert_eq!(buf[31], 2);
     }
 
     fn create_test_frame() -> DSUFrame {

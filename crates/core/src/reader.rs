@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use crate::READ_ATOMIC_BOOL_ORDERING;
 use crate::devices::Device;
-use crate::dsu::DSUFrame;
+use crate::dsu;
 use crate::errors::DeviceError;
 
 /// Number of identical IMU frames before we consider the IMU frozen.
@@ -19,14 +19,22 @@ const REINIT_RETRY_INTERVAL: Duration = Duration::from_secs(1);
 const DISCONNECT_THRESHOLD: usize = 100;
 
 /// Spawn a thread that reads from `device` and sends parsed frames over the returned channel.
+/// The thread is also responsible for sending rumble commands to the device.
 ///
 /// The reader thread will exit when `running` is set to false.
-/// Returns a [`JoinHandle`](std::thread::JoinHandle) and a mpsc Receiver for receiving frame data.
+/// Returns a [`JoinHandle`](std::thread::JoinHandle),
+/// a mpsc Receiver for receiving frame data,
+/// and a mpsc Sender for sending rumble commands.
 pub fn spawn_reader(
     running: Arc<atomic::AtomicBool>,
     device: impl Device + std::marker::Send + 'static,
-) -> (std::thread::JoinHandle<()>, mpsc::Receiver<DSUFrame>) {
-    let (tx, rx) = mpsc::channel::<DSUFrame>();
+) -> (
+    std::thread::JoinHandle<()>,
+    mpsc::Receiver<dsu::DSUFrame>,
+    mpsc::Sender<dsu::RumbleCommand>,
+) {
+    let (tx, rx) = mpsc::channel::<dsu::DSUFrame>();
+    let (rumble_tx, rumble_rx) = mpsc::channel::<dsu::RumbleCommand>();
 
     let handle = thread::spawn(move || {
         let mut frame_state = FrameState::new();
@@ -34,7 +42,7 @@ pub fn spawn_reader(
         log::debug!("Reader thread started");
 
         while running.load(READ_ATOMIC_BOOL_ORDERING) {
-            if !read_frame(&device, &mut frame_state, &tx) {
+            if !read_frame(&device, &mut frame_state, &tx, &rumble_rx) {
                 break;
             }
         }
@@ -45,13 +53,13 @@ pub fn spawn_reader(
         );
     });
 
-    (handle, rx)
+    (handle, rx, rumble_tx)
 }
 
 struct FrameState {
     pub frozen_count: usize,
     pub total_frames: usize,
-    pub prev_frame: Option<DSUFrame>,
+    pub prev_frame: Option<dsu::DSUFrame>,
     pub fail_count: usize,
     pub last_init_attempt: Option<Instant>,
 }
@@ -69,7 +77,12 @@ impl FrameState {
 }
 
 /// Read a frame, returning true if another should be read.
-fn read_frame<D>(device: &D, frame_state: &mut FrameState, tx: &mpsc::Sender<DSUFrame>) -> bool
+fn read_frame<D>(
+    device: &D,
+    frame_state: &mut FrameState,
+    tx: &mpsc::Sender<dsu::DSUFrame>,
+    rx: &mpsc::Receiver<dsu::RumbleCommand>,
+) -> bool
 where
     D: Device + std::marker::Send + 'static,
 {
@@ -175,6 +188,10 @@ where
             frame_state.fail_count,
         );
         return false;
+    }
+
+    if let Ok(rumble_cmd) = rx.try_recv() {
+        device.rumble(rumble_cmd);
     }
 
     true

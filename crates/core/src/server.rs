@@ -7,11 +7,12 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::dsu::{DSUFrame, DSUMessageType};
+use crate::dsu::{DSUFrame, DSUMessageType, RumbleCommand};
 use crate::errors::ServerError;
 use crate::{READ_ATOMIC_BOOL_ORDERING, dsu};
 
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(5);
+const SLOT_OFFSET: usize = dsu::HEADER_LEN_WITH_EVENT_TYPE + 1;
 
 /// DSU server configuration.
 ///
@@ -100,7 +101,11 @@ impl Server {
     /// Start the CemuHook UDP server and broadcast frames received on `rx` to all subscribed CemuHook clients
     /// Blocks until both the Receving loop (this thread) and Send loop (background thread) complete
     /// Returns both results on Success, Err(ServerError) if the server failed to start
-    pub fn run(&self, rx: mpsc::Receiver<DSUFrame>) -> Result<ThreadResults, ServerError> {
+    pub fn run(
+        &self,
+        rx: mpsc::Receiver<DSUFrame>,
+        tx: mpsc::Sender<RumbleCommand>,
+    ) -> Result<ThreadResults, ServerError> {
         let send_context = SendThreadContext {
             running: self.running.clone(),
             running_inner: self.running_inner.clone(),
@@ -118,13 +123,13 @@ impl Server {
             Self::send_loop(send_context);
         });
 
-        let recv_result = self.recv_loop();
+        let recv_result = self.recv_loop(&tx);
         let send_result = send_handle.join();
 
         Ok((recv_result, send_result))
     }
 
-    fn recv_loop(&self) -> io::Result<()> {
+    fn recv_loop(&self, rumble_tx: &mpsc::Sender<RumbleCommand>) -> io::Result<()> {
         let mut buf = [0u8; 256];
 
         while self.running.load(READ_ATOMIC_BOOL_ORDERING)
@@ -132,7 +137,7 @@ impl Server {
         {
             match self.socket.recv_from(&mut buf) {
                 Ok((msg_len, addr)) => {
-                    self.process_received_message(&buf, msg_len, &addr, &self.socket);
+                    self.process_received_message(&buf, msg_len, &addr, &self.socket, rumble_tx);
                 }
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
                     // Read timeout
@@ -160,6 +165,7 @@ impl Server {
         msg_len: usize,
         addr: &SocketAddr,
         socket: &UdpSocket,
+        rumble_tx: &mpsc::Sender<RumbleCommand>,
     ) {
         if msg_len < 20 {
             log::trace!("Short packet ({} bytes) from {}", msg_len, addr);
@@ -199,7 +205,9 @@ impl Server {
             DSUMessageType::RumbleInfo => {
                 handle_rumble_info_request(buf, msg_len, client_id, addr, socket, self.config.slot)
             }
-            DSUMessageType::RumbleMotor => todo!(),
+            DSUMessageType::RumbleMotor => {
+                handle_rumble_request(buf, msg_len, addr, self.config.slot, rumble_tx)
+            }
             DSUMessageType::Unknown => {
                 log::trace!("Unknown event type from {}", addr);
             }
@@ -328,9 +336,7 @@ fn handle_data_request(
     clients: &Arc<Mutex<Vec<Client>>>,
     configured_slot: u8,
 ) {
-    // Parse requested slot from payload.
-    // CemuHook DATA request: byte 20 = flags, byte 21 = slot.
-    let requested_slot = if msg_len > 21 { buf[21] } else { 0 };
+    let requested_slot = get_slot(buf, msg_len);
 
     if requested_slot != configured_slot {
         log::trace!(
@@ -376,7 +382,7 @@ fn handle_rumble_info_request(
     configured_slot: u8,
 ) {
     // Parse the slot (same beginning as handle_data_request)
-    let requested_slot = if msg_len > 21 { buf[21] } else { 0 };
+    let requested_slot = get_slot(buf, msg_len);
 
     if requested_slot != configured_slot {
         log::trace!(
@@ -392,5 +398,62 @@ fn handle_rumble_info_request(
     dsu::write_rumble_info_response(&mut rumble_buf, configured_slot, client_id, true);
     if let Err(e) = socket.send_to(&rumble_buf, addr) {
         log::warn!("Failed to send rumble info response to {}: {}", addr, e);
+    }
+}
+
+fn handle_rumble_request(
+    buf: &[u8; 256],
+    msg_len: usize,
+    addr: &SocketAddr,
+    configured_slot: u8,
+    rumble_tx: &mpsc::Sender<RumbleCommand>,
+) {
+    let requested_slot = get_slot(buf, msg_len);
+
+    if requested_slot != configured_slot {
+        log::trace!(
+            "Ignoring rumble request from {} for slot {} (configured slot is {})",
+            addr,
+            requested_slot,
+            configured_slot
+        );
+        return;
+    }
+
+    let motor_id = buf[28];
+    let intensity = buf[29];
+
+    log::trace!("Got a rumble request from {addr} motor id {motor_id} intensity {intensity}.");
+
+    if let Err(err) = rumble_tx.send(RumbleCommand {
+        motor_id,
+        intensity,
+    }) {
+        log::error!("Error sending rumble command through channel: {err:?}");
+    }
+}
+
+/// Get the slot number for controller requests.
+/// Defaults to 0 if the message is not long enough to parse this (with a warning)
+/// Logs a warning if mac-based registration is requested.
+fn get_slot(buf: &[u8; 256], msg_len: usize) -> u8 {
+    let bitmask_offset = SLOT_OFFSET - 1;
+    let bitmask = if msg_len > bitmask_offset {
+        buf[bitmask_offset]
+    } else {
+        0
+    };
+
+    if (bitmask & (1 << 1)) != 0 {
+        log::error!("The client is asking for MAC-based data but we only support slot based.");
+    }
+
+    if msg_len > SLOT_OFFSET {
+        buf[SLOT_OFFSET]
+    } else {
+        log::warn!(
+            "get_slot is assuming the slot is 0 because the message len is not long enough.."
+        );
+        0
     }
 }

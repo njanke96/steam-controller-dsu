@@ -8,7 +8,7 @@ use crate::devices::util::{
     is_u32_masked_button_pressed, scale_stick_to_byte, scale_trigger_to_byte,
 };
 use crate::devices::{DeviceButton, DeviceConfig, DeviceSmoothingAlphas, GyroActivationMode};
-use crate::dsu::DSUFrame;
+use crate::dsu::{DSUFrame, RumbleCommand};
 use crate::errors::DeviceError;
 
 /// Steam Controller vendor/product IDs.
@@ -26,6 +26,9 @@ const FEATURE_REPORT_ID: u8 = 0x01;
 const FEATURE_REPORT_SIZE: usize = 64;
 const SEND_FEATURE_REPORT_SLEEP_DURATION: Duration = Duration::from_millis(50);
 const CMD_SET_SETTINGS_VALUES: u8 = 0x87;
+
+/// Output report ID for haptic rumble (Triton/Ibex uses output reports, not feature reports)
+const REPORT_ID_HAPTIC_RUMBLE: u8 = 0x80;
 
 /// Setting register IDs
 const SETTING_LIZARD_MODE: u8 = 9;
@@ -309,6 +312,32 @@ impl Device for Triton {
             self.config.gyro_smoothing_alpha,
             self.config.accel_smoothing_alpha,
         )
+    }
+
+    fn rumble(&self, cmd: RumbleCommand) {
+        // Scale 0-255 intensity to 0-65535 motor speed
+        let speed = (cmd.intensity as u16) * 257;
+
+        // Determine which motor(s) to activate
+        // Fallback to both
+        let (left_speed, right_speed) = match cmd.motor_id {
+            0 => (speed, 0),
+            1 => (0, speed),
+            _ => (speed, speed),
+        };
+
+        // ref: steam_haptic_rumble (ibex branch) in hid-steam
+        let mut buf = [0u8; 10];
+        buf[0] = REPORT_ID_HAPTIC_RUMBLE;
+        buf[1] = 0;
+        buf[4..6].copy_from_slice(&left_speed.to_le_bytes());
+        buf[6] = 2;
+        buf[7..9].copy_from_slice(&right_speed.to_le_bytes());
+        buf[9] = 0;
+
+        if let Err(e) = self.hid.write(&buf) {
+            log::error!("Failed to send rumble command: {e}");
+        }
     }
 }
 

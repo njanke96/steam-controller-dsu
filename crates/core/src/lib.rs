@@ -75,11 +75,11 @@ pub fn run_server(
         // Start the device reader and cemuhook udp server
         //
 
-        let (reader_handle, rx) = reader::spawn_reader(running.clone(), device);
+        let (reader_handle, rx, tx) = reader::spawn_reader(running.clone(), device);
 
         let udp_server = server::Server::new(running.clone(), config.clone())?;
 
-        match udp_server.run(rx) {
+        match udp_server.run(rx, tx) {
             Ok((recv_result, send_result)) => {
                 if let Err(e) = recv_result {
                     log::error!("UDP server receive loop error: {e}");
@@ -129,7 +129,7 @@ pub fn run_debug_dump(
     device.initialize()?;
     log::info!("Initialized. Dumping frames...");
 
-    let (reader_handle, rx) = reader::spawn_reader(running.clone(), device);
+    let (reader_handle, rx, _tx) = reader::spawn_reader(running.clone(), device);
 
     while running.load(READ_ATOMIC_BOOL_ORDERING) {
         match rx.recv() {
